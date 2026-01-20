@@ -25,47 +25,42 @@ export interface RefreshTokenResponse {
 export const authService = {
     /**
      * Authenticate user with email and password
-     * POST /api/auth/login/
+     * POST /api/users/auth/login/
+     * Note: Backend expects 'username' not 'email'
      */
     async login(email: string, password: string): Promise<LoginResponse> {
-        const response = await api.post<LoginResponse>('/auth/login/', { email, password });
-        return response.data;
-    },
-
-    /**
-     * Register new user (if applicable)
-     * POST /api/auth/register/
-     */
-    async register(data: any): Promise<LoginResponse> {
-        const response = await api.post<LoginResponse>('/auth/register/', data);
+        const response = await api.post<LoginResponse>('/users/auth/login/', {
+            username: email,  // Backend expects 'username' field
+            password
+        });
         return response.data;
     },
 
     /**
      * Refresh access token using refresh token
-     * POST /api/auth/refresh/
+     * POST /api/users/auth/refresh/
      */
     async refreshToken(refresh: string): Promise<RefreshTokenResponse> {
-        const response = await api.post<RefreshTokenResponse>('/auth/refresh/', { refresh });
+        const response = await api.post<RefreshTokenResponse>('/users/auth/refresh/', { refresh });
         return response.data;
     },
 
     /**
      * Get current authenticated user
-     * GET /api/users/me/
+     * GET /api/users/auth/me/
      */
     async getCurrentUser(): Promise<User> {
-        const response = await api.get<User>('/users/me/');
+        const response = await api.get<User>('/users/auth/me/');
         return response.data;
     },
 
     /**
      * Logout (backend endpoint optional)
-     * POST /api/auth/logout/
+     * POST /api/users/auth/logout/
      */
     async logout(): Promise<void> {
         try {
-            await api.post('/auth/logout/');
+            await api.post('/users/auth/logout/');
         } catch (error) {
             console.warn('Logout endpoint failed, proceeding with client-side logout', error);
         }
