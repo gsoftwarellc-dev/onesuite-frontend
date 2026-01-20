@@ -18,6 +18,7 @@ WORKDIR /app
 # Copy dependencies from deps stage
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
+RUN npm ci
 
 # Build the Next.js app
 # The NEXT_PUBLIC_ variables will be baked into the build
