@@ -64,6 +64,20 @@ export const authService = {
         } catch (error) {
             console.warn('Logout endpoint failed, proceeding with client-side logout', error);
         }
+    },
+
+    /**
+     * Register a new user
+     * POST /api/users/
+     */
+    async register(data: { email: string; password: string; first_name: string; last_name: string }): Promise<User> {
+        // Map email to username as required by backend
+        const payload = {
+            ...data,
+            username: data.email
+        };
+        const response = await api.post<User>('/users/', payload);
+        return response.data;
     }
 };
 
