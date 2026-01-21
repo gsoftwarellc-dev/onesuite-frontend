@@ -28,17 +28,8 @@ export function RoleGuard({ children, allowedRoles }: RoleGuardProps) {
     useEffect(() => {
         if (user && !allowedRoles.includes(user.role as UserRole)) {
             // User is authenticated but doesn't have permission
-            // Redirect to their default dashboard based on role
-            const roleRoutes: Record<UserRole, string> = {
-                consultant: '/consultant',
-                manager: '/manager',
-                finance: '/finance',
-                director: '/director',
-                admin: '/finance',
-            };
-
-            const redirectPath = roleRoutes[user.role as UserRole] || '/403';
-            router.push(redirectPath);
+            // Redirect to access denied page
+            router.push('/access-denied');
         }
     }, [user, allowedRoles, router]);
 

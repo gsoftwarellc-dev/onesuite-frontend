@@ -3,45 +3,52 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
-import { Mail, Lock, ArrowRight, Eye, EyeOff } from 'lucide-react';
+import { User, Lock, ArrowRight, Eye, EyeOff } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
-import { authService } from '@/services/authService';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { toast } from 'sonner';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import * as z from 'zod';
+
+const loginSchema = z.object({
+    username: z.string().min(1, 'Username is required'),
+    password: z.string().min(1, 'Password is required'),
+});
+
+type LoginFormValues = z.infer<typeof loginSchema>;
 
 export default function LoginPage() {
     const { login } = useAuth();
-    const [formData, setFormData] = useState({
-        email: '',
-        password: '',
-    });
-
     const [showPassword, setShowPassword] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
 
-    const handleSubmit = async (e: React.FormEvent) => {
-        e.preventDefault();
+    const {
+        register,
+        handleSubmit,
+        formState: { errors },
+    } = useForm<LoginFormValues>({
+        resolver: zodResolver(loginSchema),
+        defaultValues: {
+            username: '',
+            password: '',
+        },
+    });
+
+    const onSubmit = async (data: LoginFormValues) => {
         setIsLoading(true);
 
         try {
-            await login(formData.email, formData.password);
+            await login(data.username, data.password);
             toast.success('Logged in successfully');
         } catch (error: any) {
             console.error('Login error:', error);
-            const message = error?.message || error?.response?.data?.detail || 'Failed to login';
+            const message = error?.response?.data?.detail || error?.response?.data?.message || 'Failed to login. Please check your credentials.';
             toast.error(message);
         } finally {
             setIsLoading(false);
         }
-    };
-
-    const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const value = e.target.type === 'checkbox' ? e.target.checked : e.target.value;
-        setFormData({
-            ...formData,
-            [e.target.name]: value,
-        });
     };
 
     return (
@@ -66,27 +73,27 @@ export default function LoginPage() {
                     <p className="text-gray-600">Sign in to access your dashboard</p>
                 </div>
 
-                <form onSubmit={handleSubmit} className="space-y-6">
-                    {/* Email Field */}
+                <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+                    {/* Username Field */}
                     <div className="space-y-2">
-                        <label htmlFor="email" className="block text-sm font-medium text-gray-700">
-                            Email Address
+                        <label htmlFor="username" className="block text-sm font-medium text-gray-700">
+                            Username
                         </label>
                         <div className="relative">
                             <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none">
-                                <Mail className="w-5 h-5" />
+                                <User className="w-5 h-5" />
                             </div>
                             <Input
-                                type="email"
-                                id="email"
-                                name="email"
-                                value={formData.email}
-                                onChange={handleChange}
-                                required
-                                placeholder="you@company.com"
-                                className="pl-10 h-11"
+                                {...register('username')}
+                                type="text"
+                                id="username"
+                                placeholder="Enter your username"
+                                className={`pl-10 h-11 ${errors.username ? 'border-red-500 focus-visible:ring-red-500' : ''}`}
                             />
                         </div>
+                        {errors.username && (
+                            <p className="text-sm text-red-500 mt-1">{errors.username.message}</p>
+                        )}
                     </div>
 
                     {/* Password Field */}
@@ -99,14 +106,11 @@ export default function LoginPage() {
                                 <Lock className="w-5 h-5" />
                             </div>
                             <Input
+                                {...register('password')}
                                 type={showPassword ? 'text' : 'password'}
                                 id="password"
-                                name="password"
-                                value={formData.password}
-                                onChange={handleChange}
-                                required
                                 placeholder="Enter your password"
-                                className="pl-10 pr-10 h-11"
+                                className={`pl-10 pr-10 h-11 ${errors.password ? 'border-red-500 focus-visible:ring-red-500' : ''}`}
                             />
                             <button
                                 type="button"
@@ -120,6 +124,9 @@ export default function LoginPage() {
                                 )}
                             </button>
                         </div>
+                        {errors.password && (
+                            <p className="text-sm text-red-500 mt-1">{errors.password.message}</p>
+                        )}
                     </div>
 
                     {/* Forgot Password */}
@@ -148,16 +155,6 @@ export default function LoginPage() {
                         )}
                     </Button>
                 </form>
-
-                {/* Sign Up Link */}
-                <div className="mt-6 text-center">
-                    <p className="text-gray-600 text-sm">
-                        Don't have an account?{' '}
-                        <Link href="/signup" className="text-[#F4323D] hover:text-[#d62d37] font-medium">
-                            Sign Up
-                        </Link>
-                    </p>
-                </div>
             </div>
 
             {/* Help Text */}

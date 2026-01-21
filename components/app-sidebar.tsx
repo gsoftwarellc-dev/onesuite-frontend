@@ -13,6 +13,7 @@ import {
     Settings,
     Users,
     Bell,
+    CheckCircle,
 } from "lucide-react"
 
 import {
@@ -115,7 +116,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             roles: ["director"],
         },
         {
-            title: "Commission",
+            title: "Commissions", // "consultant → commissions"
             url: "#",
             icon: DollarSign,
             items: [
@@ -128,28 +129,56 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                     url: "/history",
                 },
             ],
+            roles: ["consultant"],
         },
         {
-            title: "Team",
+            title: "Approvals", // "manager → approvals"
+            url: "/approvals",
+            icon: CheckCircle, // Need to ensure imported or use accessible icon
+            roles: ["manager", "finance", "director"],
+        },
+        {
+            title: "Team", // "manager → team"
             url: "/team",
             icon: Users,
             roles: ["manager", "director"],
+        },
+        {
+            title: "Payouts", // "finance → payouts", "consultant → payouts" (Assuming Consultant Payouts view)
+            url: "/payouts",
+            icon: CreditCard,
+            roles: ["finance", "consultant", "director"],
+        },
+        {
+            title: "Payments", // "finance → payments"
+            url: "/payments",
+            icon: DollarSign,
+            roles: ["finance"],
+        },
+        {
+            title: "Analytics", // "admin/director → analytics"
+            url: "/analytics",
+            icon: PieChart,
+            roles: ["director", "admin"],
         },
         {
             title: "Notifications",
             url: "/notifications",
             icon: Bell,
             showBadge: true,
+            // All roles
         },
         {
             title: "Payslips",
             url: "/payslips",
             icon: FileText,
+            // All roles (or typically employees)
         },
         {
             title: "Settings",
             url: "/settings",
             icon: Settings,
+            // All roles
         },
     ]
 
@@ -160,7 +189,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     });
 
     return (
-        <Sidebar collapsible="icon" {...props}>
+        <Sidebar {...props}>
             <SidebarHeader>
                 <div className="flex items-center gap-2 px-2 py-2">
                     <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
@@ -180,25 +209,23 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                             {filteredNavItems.map((item) => (
                                 <SidebarMenuItem key={item.title}>
                                     {item.items ? (
-                                        <SidebarMenuButton asChild tooltip={item.title}>
-                                            <div className="flex flex-col gap-1 items-start">
-                                                <div className="flex items-center gap-2 font-medium">
-                                                    <item.icon />
-                                                    <span>{item.title}</span>
-                                                </div>
-                                                <div className="pl-6 flex flex-col gap-1 w-full">
-                                                    {item.items.map((subItem) => (
-                                                        <a
-                                                            key={subItem.title}
-                                                            href={subItem.url}
-                                                            className="text-sm text-gray-500 hover:text-gray-900 py-1"
-                                                        >
-                                                            {subItem.title}
-                                                        </a>
-                                                    ))}
-                                                </div>
+                                        <div className="flex flex-col gap-1 py-2">
+                                            <div className="flex items-center gap-2 px-2 py-1.5 font-medium text-sm">
+                                                <item.icon className="h-4 w-4" />
+                                                <span>{item.title}</span>
                                             </div>
-                                        </SidebarMenuButton>
+                                            <div className="pl-6 flex flex-col gap-0.5">
+                                                {item.items.map((subItem) => (
+                                                    <a
+                                                        key={subItem.title}
+                                                        href={subItem.url}
+                                                        className="text-sm text-muted-foreground hover:text-foreground hover:bg-accent px-2 py-1.5 rounded-md transition-colors cursor-pointer"
+                                                    >
+                                                        {subItem.title}
+                                                    </a>
+                                                ))}
+                                            </div>
+                                        </div>
                                     ) : (
                                         <SidebarMenuButton asChild tooltip={item.title}>
                                             <a href={item.url} className="relative">

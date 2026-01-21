@@ -4,282 +4,157 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { LineChart, Line, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
-import {
-    CheckCircle,
-    XCircle,
-    Clock,
-    DollarSign,
-    CreditCard,
-} from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { StatusActionButton } from '@/components/dashboard/status-action-button';
-import { commissionService, Commission, CommissionStatus } from '@/services/commissionService';
+import { RoleGuard } from '@/components/guards/RoleGuard';
+import { analyticsService, FinanceDashboardDTO } from '@/services/analyticsService';
+import { LoadingSkeleton } from '@/components/loading-skeleton';
 
 export default function FinanceDashboard() {
     const router = useRouter();
-    const [activeView, setActiveView] = useState<'dashboard' | 'commissions' | 'payments' | 'users' | 'reports' | 'settings'>('dashboard');
-    const [commissions, setCommissions] = useState<Commission[]>([]);
-    const [stats, setStats] = useState<any[]>([]);
+    const [dashboardData, setDashboardData] = useState<FinanceDashboardDTO | null>(null);
     const [loading, setLoading] = useState(true);
-    const [monthlyPaymentData, setMonthlyPaymentData] = useState<any[]>([]);
-    const [paymentStatusData, setPaymentStatusData] = useState<any[]>([]);
+    const [year, setYear] = useState<string>(new Date().getFullYear().toString());
 
     useEffect(() => {
-        const loadData = async () => {
+        const loadDashboard = async () => {
             try {
                 setLoading(true);
-                const fetchedCommissions = await commissionService.getCommissions(); // Finance sees all or based on permissions
-                setCommissions(fetchedCommissions);
-
-                // Calculate Stats
-                const pendingCount = fetchedCommissions.filter(c => c.status === 'pending').length;
-                const pendingValue = fetchedCommissions
-                    .filter(c => c.status === 'pending')
-                    .reduce((sum, c) => sum + c.commissionAmount, 0);
-
-                const approvedUnpaidCount = fetchedCommissions.filter(c => c.status === 'approved').length;
-                const approvedUnpaidValue = fetchedCommissions
-                    .filter(c => c.status === 'approved')
-                    .reduce((sum, c) => sum + c.commissionAmount, 0);
-
-                const paidValue = fetchedCommissions
-                    .filter(c => c.status === 'paid')
-                    .reduce((sum, c) => sum + c.commissionAmount, 0);
-
-                setStats([
-                    {
-                        icon: DollarSign,
-                        label: 'Total Pending',
-                        value: `S$${pendingValue.toLocaleString()}`,
-                        subtext: `${pendingCount} commissions`,
-                        color: 'bg-yellow-500',
-                        trend: '+12%', // Mock trend for now
-                    },
-                    {
-                        icon: CheckCircle,
-                        label: 'Approved (Unpaid)',
-                        value: `S$${approvedUnpaidValue.toLocaleString()}`,
-                        subtext: `${approvedUnpaidCount} commissions`,
-                        color: 'bg-blue-500',
-                        trend: '+8%',
-                    },
-                    {
-                        icon: CreditCard,
-                        label: 'Total Paid',
-                        value: `S$${paidValue.toLocaleString()}`,
-                        subtext: 'All time',
-                        color: 'bg-green-500',
-                        trend: '+15%',
-                    },
-                ]);
-
-                // Calculate Payment Status Distribution
-                const statusCounts = {
-                    Paid: fetchedCommissions.filter(c => c.status === 'paid').length,
-                    Approved: fetchedCommissions.filter(c => c.status === 'approved').length,
-                    Pending: fetchedCommissions.filter(c => c.status === 'pending').length,
-                };
-
-                setPaymentStatusData([
-                    { name: 'Paid', value: statusCounts.Paid, color: '#10B981' },
-                    { name: 'Approved', value: statusCounts.Approved, color: '#3B82F6' },
-                    { name: 'Pending', value: statusCounts.Pending, color: '#F59E0B' },
-                ].filter(d => d.value > 0));
-
-                // Mock Monthly Data (Replace with real date aggregation later)
-                setMonthlyPaymentData([
-                    { month: 'Jul', paid: 195000, pending: 42000 },
-                    { month: 'Aug', paid: 208000, pending: 38000 },
-                    { month: 'Sep', paid: 198000, pending: 45000 },
-                    { month: 'Oct', paid: 224000, pending: 52000 },
-                    { month: 'Nov', paid: 218000, pending: 48000 },
-                    { month: 'Dec', paid: 234500, pending: 125400 },
-                ]);
-
+                const data = await analyticsService.getFinanceDashboard(parseInt(year));
+                setDashboardData(data);
             } catch (error) {
-                console.error("Failed to load finance data:", error);
-                toast.error("Failed to load data.");
+                console.error('Failed to load finance dashboard:', error);
+                toast.error('Failed to load analytics');
             } finally {
                 setLoading(false);
             }
         };
+        loadDashboard();
+    }, [year]);
 
-        loadData();
-    }, []);
+    if (loading) return <div className="p-6"><LoadingSkeleton /></div>;
+    if (!dashboardData) return null;
 
-    const handleStatusUpdate = async (id: string, newStatus: CommissionStatus) => {
-        try {
-            await commissionService.updateStatus(id, newStatus);
-            toast.success(`Commission ${newStatus} successfully`);
+    const { summary, commission_trend, top_performers, reconciliation_status } = dashboardData;
 
-            // Refresh local state
-            setCommissions(prev => prev.map(c =>
-                c.id === id ? { ...c, status: newStatus } : c
-            ));
-        } catch (error) {
-            toast.error(`Failed to update status to ${newStatus}`);
-        }
-    };
+    const trendData = commission_trend.map(item => ({
+        month: item.month,
+        amount: parseFloat(item.total)
+    }));
 
-    const getStatusBadge = (status: CommissionStatus) => {
-        const baseClasses = 'px-2.5 py-1 rounded-full text-xs inline-flex items-center gap-1';
-        switch (status) {
-            case 'pending':
-                return <span className={`${baseClasses} bg-yellow-100 text-yellow-800`}><Clock className="w-3 h-3" /> Pending</span>;
-            case 'approved':
-            case 'authorized':
-                return <span className={`${baseClasses} bg-blue-100 text-blue-800`}><CheckCircle className="w-3 h-3" /> Approved</span>;
-            case 'paid':
-                return <span className={`${baseClasses} bg-green-100 text-green-800`}><CreditCard className="w-3 h-3" /> Paid</span>;
-            case 'rejected':
-                return <span className={`${baseClasses} bg-red-100 text-red-800`}><XCircle className="w-3 h-3" /> Rejected</span>;
-            default:
-                return null;
-        }
-    };
-
-    const renderMainContent = () => {
-        switch (activeView) {
-            case 'dashboard':
-                return (
-                    <div className="space-y-6">
-                        {/* Summary Cards */}
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                            {stats.map((stat, i) => (
-                                <div key={i} className="bg-white rounded-lg shadow p-6">
-                                    <div className="flex items-start justify-between mb-4">
-                                        <div className={`w-12 h-12 ${stat.color} rounded-lg flex items-center justify-center`}>
-                                            <stat.icon className="w-6 h-6 text-white" />
-                                        </div>
-                                    </div>
-                                    <div className="text-2xl mb-1">{stat.value}</div>
-                                    <div className="text-sm text-gray-600 mb-1">{stat.label}</div>
-                                </div>
-                            ))}
-                        </div>
-
-                        {/* Charts Row */}
-                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                            {/* Monthly Payment Trends */}
-                            <div className="bg-white rounded-lg shadow p-6">
-                                <div className="flex items-center justify-between mb-6">
-                                    <h2 className="text-xl">Monthly Payment Trends</h2>
-                                </div>
-                                <ResponsiveContainer width="100%" height={300}>
-                                    <LineChart data={monthlyPaymentData}>
-                                        <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                                        <XAxis
-                                            dataKey="month"
-                                            stroke="#666"
-                                            style={{ fontSize: '12px' }}
-                                        />
-                                        <YAxis
-                                            stroke="#666"
-                                            style={{ fontSize: '12px' }}
-                                            tickFormatter={(value) => `$${(value / 1000).toFixed(0)}k`}
-                                        />
-                                        <Tooltip />
-                                        <Legend />
-                                        <Line type="monotone" dataKey="paid" stroke="#10B981" />
-                                        <Line type="monotone" dataKey="pending" stroke="#F59E0B" />
-                                    </LineChart>
-                                </ResponsiveContainer>
-                            </div>
-
-                            {/* Payment Status Distribution */}
-                            <div className="bg-white rounded-lg shadow p-6">
-                                <h2 className="text-xl mb-6">Payment Status Distribution</h2>
-                                <ResponsiveContainer width="100%" height={300}>
-                                    <PieChart>
-                                        <Pie
-                                            data={paymentStatusData}
-                                            cx="50%"
-                                            cy="50%"
-                                            labelLine={false}
-                                            label={({ name, percent }: any) => `${name} ${(percent * 100).toFixed(0)}%`}
-                                            outerRadius={100}
-                                            fill="#8884d8"
-                                            dataKey="value"
-                                        >
-                                            {paymentStatusData.map((entry, index) => (
-                                                <Cell key={`cell-${index}`} fill={entry.color} />
-                                            ))}
-                                        </Pie>
-                                        <Tooltip />
-                                    </PieChart>
-                                </ResponsiveContainer>
-                            </div>
-                        </div>
-
-                        {/* Detailed Table */}
-                        <div className="bg-white rounded-lg shadow">
-                            <div className="p-6 border-b border-gray-200 flex justify-between">
-                                <h2 className="text-xl">Recent Commissions</h2>
-                                <Button variant="ghost" className="text-red-500" onClick={() => setActiveView('commissions')}>View All</Button>
-                            </div>
-                            <div className="overflow-x-auto">
-                                <table className="w-full">
-                                    <thead className="bg-[#F4F4F4]">
-                                        <tr>
-                                            <th className="px-4 py-3 text-left text-xs uppercase tracking-wider">ID</th>
-                                            <th className="px-4 py-3 text-left text-xs uppercase tracking-wider">Consultant</th>
-                                            <th className="px-4 py-3 text-left text-xs uppercase tracking-wider">Amount</th>
-                                            <th className="px-4 py-3 text-left text-xs uppercase tracking-wider">Status</th>
-                                            <th className="px-4 py-3 text-left text-xs uppercase tracking-wider">Action</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody className="bg-white divide-y divide-gray-200">
-                                        {commissions.slice(0, 10).map((item) => (
-                                            <tr key={item.id} className="hover:bg-gray-50">
-                                                <td className="px-4 py-3 whitespace-nowrap text-sm">{item.id}</td>
-                                                <td className="px-4 py-3 whitespace-nowrap text-sm">{item.consultantName}</td>
-                                                <td className="px-4 py-3 whitespace-nowrap text-sm">S${item.commissionAmount.toLocaleString()}</td>
-                                                <td className="px-4 py-3 whitespace-nowrap">{getStatusBadge(item.status)}</td>
-                                                <td className="px-4 py-3 whitespace-nowrap">
-                                                    <StatusActionButton
-                                                        currentStatus={item.status}
-                                                        userRole="finance"
-                                                        onAuthorize={() => handleStatusUpdate(item.id, 'authorized')}
-                                                        onApprove={() => handleStatusUpdate(item.id, 'approved')}
-                                                        onReject={() => handleStatusUpdate(item.id, 'rejected')}
-                                                        onMarkPaid={() => handleStatusUpdate(item.id, 'paid')}
-                                                    />
-                                                </td>
-                                            </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
-                    </div>
-                );
-
-            case 'commissions':
-                return (
-                    <div className="bg-white rounded-lg shadow p-6">
-                        <h2 className="text-xl mb-4">Master Commission Table</h2>
-                        <Button onClick={() => setActiveView('dashboard')}>Back to Dashboard</Button>
-                        {/* Full table would go here */}
-                    </div>
-                )
-
-            default:
-                return <div>View not found</div>;
-        }
-    };
-
-    if (loading) {
-        return (
-            <div className="w-full h-96 flex items-center justify-center">
-                <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-gray-900"></div>
-            </div>
-        );
-    }
+    const pieData = [
+        { name: 'Matched', value: reconciliation_status.matched, color: '#10B981' },
+        { name: 'Pending', value: reconciliation_status.pending, color: '#F59E0B' },
+        { name: 'Discrepancy', value: reconciliation_status.discrepancy, color: '#EF4444' },
+    ].filter(d => d.value > 0);
 
     return (
-        <div className="w-full">
-            <h1 className="text-2xl font-bold tracking-tight mb-4">Finance Dashboard</h1>
-            {renderMainContent()}
-        </div>
+        <RoleGuard allowedRoles={['finance', 'admin']}>
+            <div className="space-y-6">
+                <div className="flex justify-between items-center">
+                    <h1 className="text-2xl font-bold tracking-tight">Finance Dashboard</h1>
+                    <div className="flex items-center gap-2">
+                        <span className="text-sm text-gray-500">Year:</span>
+                        <select
+                            value={year}
+                            onChange={(e) => setYear(e.target.value)}
+                            className="bg-white border text-sm rounded-md h-9 px-3 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        >
+                            <option value="2024">2024</option>
+                            <option value="2025">2025</option>
+                            <option value="2026">2026</option>
+                        </select>
+                    </div>
+                </div>
+
+                {/* Payout Management Call-to-Action */}
+                <div className="bg-white p-6 rounded-lg shadow border-l-4 border-blue-500 mb-6 flex justify-between items-center">
+                    <div>
+                        <h3 className="text-lg font-semibold text-gray-900">Payout Management</h3>
+                        <p className="text-gray-600 text-sm">Create, lock, and release commission payout batches.</p>
+                    </div>
+                    <Button onClick={() => router.push('/finance/payouts')} className="bg-blue-600 hover:bg-blue-700">
+                        Manage Payout Batches
+                    </Button>
+                </div>
+
+                {/* Summary Cards */}
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <div className="bg-white p-6 rounded-lg shadow">
+                        <div className="text-sm text-gray-500 mb-1">Total Paid ({year})</div>
+                        <div className="text-2xl font-bold">S$ {parseFloat(summary.total_paid_ytd).toLocaleString()}</div>
+                    </div>
+                    <div className="bg-white p-6 rounded-lg shadow">
+                        <div className="text-sm text-gray-500 mb-1">Outstanding Liability</div>
+                        <div className="text-2xl font-bold text-orange-600">S$ {parseFloat(summary.outstanding_liability).toLocaleString()}</div>
+                    </div>
+                    <div className="bg-white p-6 rounded-lg shadow">
+                        <div className="text-sm text-gray-500 mb-1">Payment Success Rate</div>
+                        <div className="text-2xl font-bold text-green-600">{summary.payment_success_rate}</div>
+                    </div>
+                    <div className="bg-white p-6 rounded-lg shadow">
+                        <div className="text-sm text-gray-500 mb-1">Avg Cycle Days</div>
+                        <div className="text-2xl font-bold">{summary.avg_cycle_days}</div>
+                    </div>
+                </div>
+
+                {/* Charts Row */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    {/* Monthly Trend */}
+                    <div className="bg-white rounded-lg shadow p-6">
+                        <div className="flex items-center justify-between mb-6">
+                            <h2 className="text-xl">Commission Trends</h2>
+                        </div>
+                        <ResponsiveContainer width="100%" height={300}>
+                            <LineChart data={trendData}>
+                                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                                <XAxis dataKey="month" stroke="#666" fontSize={12} />
+                                <YAxis stroke="#666" fontSize={12} tickFormatter={val => `$${val / 1000}k`} />
+                                <Tooltip formatter={(val: number | undefined) => [`S$ ${(val || 0).toLocaleString()}`, 'Total']} />
+                                <Legend />
+                                <Line type="monotone" dataKey="amount" name="Commission Amt" stroke="#10B981" strokeWidth={2} />
+                            </LineChart>
+                        </ResponsiveContainer>
+                    </div>
+
+                    {/* Reconciliation Status */}
+                    <div className="bg-white rounded-lg shadow p-6">
+                        <h2 className="text-xl mb-6">Reconciliation Status</h2>
+                        <ResponsiveContainer width="100%" height={300}>
+                            <PieChart>
+                                <Pie
+                                    data={pieData}
+                                    cx="50%"
+                                    cy="50%"
+                                    labelLine={false}
+                                    label={({ name, percent }: any) => `${name} ${(percent * 100).toFixed(0)}%`}
+                                    outerRadius={100}
+                                    fill="#8884d8"
+                                    dataKey="value"
+                                >
+                                    {pieData.map((entry, index) => (
+                                        <Cell key={`cell-${index}`} fill={entry.color} />
+                                    ))}
+                                </Pie>
+                                <Tooltip />
+                            </PieChart>
+                        </ResponsiveContainer>
+                        {pieData.length === 0 && <div className="text-center text-gray-500 mt-4">No reconciliation data</div>}
+                    </div>
+                </div>
+
+                {/* Top Performers */}
+                <div className="bg-white rounded-lg shadow p-6">
+                    <h2 className="text-xl mb-4">Top Performers (Global)</h2>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        {top_performers.map((p, i) => (
+                            <div key={i} className="flex items-center justify-between border-b pb-2">
+                                <span className="font-medium text-gray-900">#{p.rank} {p.name}</span>
+                                <span className="font-bold text-gray-600">S$ {parseFloat(p.total).toLocaleString()}</span>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            </div>
+        </RoleGuard>
     );
 }

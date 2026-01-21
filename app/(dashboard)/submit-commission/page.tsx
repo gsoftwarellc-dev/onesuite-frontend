@@ -23,6 +23,7 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { commissionService } from '@/services/commissionService';
 
 interface CommissionEntry {
     id: string;
@@ -171,7 +172,7 @@ export default function SubmitCommissionPage() {
         };
     };
 
-    const handleSubmit = () => {
+    const handleSubmit = async () => {
         // Validate all entries
         let hasErrors = false;
 
@@ -206,10 +207,42 @@ export default function SubmitCommissionPage() {
             return;
         }
 
-        // Submit successfully
-        setSubmittedCount(entries.length);
-        setIsSubmitted(true);
-        toast.success(`${entries.length} commission ${entries.length === 1 ? 'entry' : 'entries'} submitted successfully`);
+        try {
+            // Submit all entries sequentially (or parallel depending on preference, sequential is safer for errors)
+            let successCount = 0;
+
+            for (const entry of entries) {
+                // Convert DD/MM/YYYY to YYYY-MM-DD
+                const [day, month, year] = entry.paymentDate.split('/');
+                const formattedDate = `${year}-${month}-${day}`;
+
+                await commissionService.createCommission({
+                    clientName: entry.clientName,
+                    productType: entry.productType,
+                    paymentDate: formattedDate,
+                    grossRevenue: parseFloat(entry.grossRevenue),
+                    sfa: parseFloat(entry.sfa),
+                    tiering: parseFloat(entry.tiering),
+                    referralPercentage: entry.referralPercentage ? parseFloat(entry.referralPercentage) : 0,
+                    referralName: entry.referralName,
+                    probationIncentive: entry.probationIncentive ? parseFloat(entry.probationIncentive) : 0,
+                    otherClaimsRemarks: entry.otherClaimsRemarks,
+                    otherClaimsAmount: entry.otherClaimsAmount ? parseFloat(entry.otherClaimsAmount) : 0,
+                    gstPaid: entry.gstPaid,
+                });
+                successCount++;
+            }
+
+            // Submit successfully
+            setSubmittedCount(successCount);
+            setIsSubmitted(true);
+            toast.success(`${successCount} commission ${successCount === 1 ? 'entry' : 'entries'} submitted successfully`);
+
+        } catch (error: any) {
+            console.error("Submission failed:", error);
+            const msg = error.response?.data?.detail || error.response?.data?.message || "Failed to submit commission. Please try again.";
+            toast.error(msg);
+        }
     };
 
     if (isSubmitted) {

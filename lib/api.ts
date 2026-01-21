@@ -1,87 +1,87 @@
 import axios, { AxiosError } from 'axios';
-import { tokenStore } from './tokenStore';
-
-/**
- * Standardized API Error shape for UI consumption
- */
-export interface ApiError {
-    message: string;
-    status: number;
-    code?: string;
-    details?: any;
-}
+import { getAccessToken, getRefreshToken, setAccessToken, setRefreshToken, clearTokens } from './authTokens';
 
 const api = axios.create({
-    baseURL: process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api',
+    baseURL: process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000/api',
     headers: {
         'Content-Type': 'application/json',
     },
 });
 
-/**
- * Request Interceptor - Attach Authorization token
- * Uses TokenStore abstraction instead of direct localStorage access
- */
+// Request Interceptor
 api.interceptors.request.use((config) => {
-    const token = tokenStore.getAccessToken();
+    const token = getAccessToken();
     if (token) {
         config.headers.Authorization = `Bearer ${token}`;
     }
     return config;
 });
 
-/**
- * Response Interceptor - Normalize errors
- * 
- * IMPORTANT: This interceptor MUST NOT perform navigation or redirects.
- * - Redirects are handled by AuthGuard and RoleGuard components
- * - This interceptor only normalizes error responses for UI consumption
- */
+// Response Interceptor
 api.interceptors.response.use(
     (response) => response,
-    (error: AxiosError) => {
-        const apiError: ApiError = {
-            message: 'An unexpected error occurred',
-            status: error.response?.status || 500,
-        };
+    async (error: AxiosError) => {
+        const originalRequest = error.config as any;
 
-        if (error.response) {
-            const data = error.response.data as any;
+        // Handle 401 Unauthorized - Try token refresh
+        if (error.response?.status === 401 && !originalRequest._retry) {
+            originalRequest._retry = true;
 
-            // Normalize error message from various backend formats
-            apiError.message =
-                data?.detail ||
-                data?.message ||
-                data?.error ||
-                `Request failed with status ${error.response.status}`;
+            const refreshToken = getRefreshToken();
 
-            apiError.code = data?.code;
-            apiError.details = data?.errors || data?.validation_errors;
+            if (refreshToken) {
+                try {
+                    // Attempt to refresh token
+                    // Use a new axios instance to avoid interceptor loops
+                    const response = await axios.post(
+                        `${process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000/api'}/users/auth/refresh/`,
+                        { refresh: refreshToken }
+                    );
 
-            // Log specific error types for debugging
-            switch (error.response.status) {
-                case 401:
-                    console.warn('Unauthorized request - token may be expired');
-                    // AuthGuard will handle redirect to /login
-                    break;
-                case 403:
-                    console.warn('Forbidden - insufficient permissions');
-                    // RoleGuard will handle redirect to appropriate page
-                    break;
-                case 422:
-                    console.warn('Validation error:', apiError.details);
-                    break;
-                case 500:
-                    console.error('Server error:', apiError.message);
-                    break;
+                    const { access, refresh } = response.data;
+
+                    setAccessToken(access);
+                    // Backend might rotate refresh token, update if provided
+                    if (refresh) {
+                        setRefreshToken(refresh);
+                    }
+
+                    // Retry with new token
+                    originalRequest.headers.Authorization = `Bearer ${access}`;
+                    return api(originalRequest);
+                } catch (refreshError) {
+                    // Refresh failed - clear tokens and redirect to login
+                    clearTokens();
+                    if (typeof window !== 'undefined') {
+                        window.location.href = '/login';
+                    }
+                    return Promise.reject(refreshError);
+                }
+            } else {
+                // No refresh token - redirect to login
+                clearTokens();
+                if (typeof window !== 'undefined') {
+                    window.location.href = '/login';
+                }
             }
-        } else if (error.request) {
-            apiError.message = 'Network error - please check your connection';
-            apiError.status = 0;
         }
 
-        // Reject with normalized error
-        return Promise.reject(apiError);
+        // Handle 403 Forbidden - User doesn't have permission
+        if (error.response?.status === 403) {
+            // Don't clear tokens, don't retry - just redirect to access-denied
+            if (typeof window !== 'undefined' && !window.location.pathname.includes('/access-denied')) {
+                window.location.href = '/access-denied';
+            }
+            return Promise.reject(error);
+        }
+
+        // Handle 422 Validation Error - Pass through for component to handle
+        // No special action needed - error will be handled by calling component
+
+        // Handle 500 Server Error - Log but don't crash
+        // No special action needed - error will be handled by calling component
+
+        return Promise.reject(error);
     }
 );
 

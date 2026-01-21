@@ -18,6 +18,7 @@ import { Input } from '@/components/ui/input';
 import { StatusFlow } from '@/components/dashboard/status-flow';
 import { StatusActionButton } from '@/components/dashboard/status-action-button';
 import { commissionService, Commission, CommissionStatus } from '@/services/commissionService';
+import { RoleGuard } from '@/components/guards/RoleGuard';
 
 export default function DirectorDashboard() {
     const router = useRouter();
@@ -75,23 +76,9 @@ export default function DirectorDashboard() {
                     },
                 ]);
 
-                // Mock Trend Data (Need historical API for real trend)
-                setApprovalTrendData([
-                    { month: 'Jul', approved: 145, rejected: 8 },
-                    { month: 'Aug', approved: 158, rejected: 12 },
-                    { month: 'Sep', approved: 142, rejected: 6 },
-                    { month: 'Oct', approved: 167, rejected: 9 },
-                    { month: 'Nov', approved: 153, rejected: 7 },
-                    { month: 'Dec', approved: 178, rejected: 10 },
-                ]);
-
-                // Mock Team Performance
-                setTeamPerformanceData([
-                    { name: 'Advisory A', total: 285400 },
-                    { name: 'Advisory B', total: 312800 },
-                    { name: 'Strategy A', total: 396700 },
-                    { name: 'Strategy B', total: 268900 },
-                ]);
+                // Waiting for Real Analytics API - using fallback UI
+                setApprovalTrendData([]);
+                setTeamPerformanceData([]);
 
             } catch (error) {
                 console.error("Failed to load director data:", error);
@@ -278,9 +265,11 @@ export default function DirectorDashboard() {
 
 
     return (
-        <div className="w-full">
-            <h1 className="text-2xl font-bold tracking-tight mb-4">Director Dashboard</h1>
-            {renderMainContent()}
-        </div>
+        <RoleGuard allowedRoles={['director', 'admin']}>
+            <div className="w-full">
+                <h1 className="text-2xl font-bold tracking-tight mb-4">Director Dashboard</h1>
+                {renderMainContent()}
+            </div>
+        </RoleGuard>
     );
 }

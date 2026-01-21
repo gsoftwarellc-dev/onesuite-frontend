@@ -3,34 +3,32 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
-import { BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts';
 import {
     Users,
     CheckCircle,
-    XCircle,
     Clock,
-    User,
     Search,
     ChevronDown,
     BarChart3,
-    TrendingUp,
     Upload,
     Filter,
     ArrowUp,
     ArrowDown,
-    Info,
+    XCircle,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { analyticsService, ManagerDashboardDTO } from '@/services/analyticsService';
 import { Input } from '@/components/ui/input';
 import { commissionService, Commission, CommissionStatus } from '@/services/commissionService';
 import { userService, User as UserType } from '@/services/userService';
+import { RoleGuard } from '@/components/guards/RoleGuard';
+import { StatusActionButton } from '@/components/dashboard/status-action-button';
 
 export default function ManagerDashboard() {
     const router = useRouter();
-    const [activeView, setActiveView] = useState<'dashboard' | 'review' | 'team' | 'reports' | 'profile'>('dashboard');
+    const [activeView, setActiveView] = useState<'dashboard' | 'review' | 'team' | 'reports'>('dashboard');
     const [selectedFilter, setSelectedFilter] = useState('all');
-    const [teamFilter, setTeamFilter] = useState('all');
-    const [consultantFilter, setConsultantFilter] = useState('all');
     const [sortBy, setSortBy] = useState<'name-asc' | 'name-desc' | 'amount-desc'>('name-asc');
     const [searchQuery, setSearchQuery] = useState('');
     const [commissions, setCommissions] = useState<Commission[]>([]);
@@ -48,56 +46,46 @@ export default function ManagerDashboard() {
         const fetchDashboardData = async () => {
             try {
                 setLoading(true);
-                // Fetch commissions for manager view
-                // In a real API, the backend would filter this based on role "manager"
+
+                // 1. Analytics for KPIs (Source of Truth)
+                const analytics = await analyticsService.getManagerDashboard();
+
+                // 2. Operational Data for Table
                 const fetchedCommissions = await commissionService.getCommissions();
                 setCommissions(fetchedCommissions);
 
-                // Fetch team members
+                // 3. Team Data
                 const members = await userService.getTeamMembers();
                 setTeamMembers(members);
 
-                // Calculate stats
-                const pendingCount = fetchedCommissions.filter(c => c.status === 'pending').length;
-                const approvedAmount = fetchedCommissions
-                    .filter(c => c.status === 'approved' || c.status === 'paid')
-                    .reduce((acc, c) => acc + c.commissionAmount, 0);
-
+                // Map Analytics to Stats
                 setStats([
                     {
                         icon: Clock,
                         label: 'Pending Review',
-                        value: pendingCount.toString(),
+                        value: analytics.summary.pending_approvals.toString(),
                         subtext: 'Requires your attention',
                         color: 'bg-yellow-500',
                     },
                     {
                         icon: CheckCircle,
-                        label: 'Total Approved',
-                        value: `S$${approvedAmount.toLocaleString()}`,
-                        subtext: 'All time',
+                        label: 'Team Total (YTD)',
+                        value: `S$${parseFloat(analytics.summary.team_total_ytd).toLocaleString()}`,
+                        subtext: `From ${analytics.summary.team_size} members`,
                         color: 'bg-green-500',
                     },
                     {
                         icon: Users,
-                        label: 'Active Team Members',
-                        value: members.length.toString(),
-                        subtext: 'Direct reports',
+                        label: 'Team Size',
+                        value: analytics.summary.team_size.toString(),
+                        subtext: 'Active Consultants',
                         color: 'bg-blue-500',
-                    },
-                    {
-                        icon: TrendingUp,
-                        label: 'Team Performance',
-                        value: 'Good',
-                        subtext: 'Based on revenue',
-                        color: 'bg-purple-500',
-                    },
+                    }
                 ]);
 
             } catch (error) {
                 console.error("Failed to fetch dashboard data:", error);
-                toast.error("Failed to load dashboard data. Using mock data.");
-                // Fallback to mock data handled in UI if empty
+                toast.error("Failed to load dashboard data.");
             } finally {
                 setLoading(false);
             }
@@ -108,10 +96,9 @@ export default function ManagerDashboard() {
 
     // Filter and sort commissions
     const getFilteredCommissions = () => {
-        let filtered = commissions.filter(commission => {
+        const filtered = commissions.filter(commission => {
             const matchesStatus = selectedFilter === 'all' || commission.status === selectedFilter;
-            // const matchesTeam = teamFilter === 'all' || commission.team === teamFilter; // Team field might not exist on simple Commission type yet
-            const matchesConsultant = consultantFilter === 'all' || commission.consultantName === consultantFilter;
+            const matchesConsultant = true; // consultantFilter === 'all' || commission.consultantName === consultantFilter;
             const matchesSearch =
                 commission.consultantName.toLowerCase().includes(searchQuery.toLowerCase()) ||
                 commission.productType.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -130,6 +117,21 @@ export default function ManagerDashboard() {
         }
 
         return filtered;
+    };
+
+    const handleStatusUpdate = async (id: string, newStatus: CommissionStatus) => {
+        try {
+            await commissionService.updateStatus(id, newStatus);
+            toast.success(`Commission ${newStatus} successfully`);
+
+            // Refresh local state
+            setCommissions(prev => prev.map(c =>
+                c.id === id ? { ...c, status: newStatus } : c
+            ));
+        } catch (error) {
+            console.error("Failed to update status:", error);
+            toast.error(`Failed to update status to ${newStatus}`);
+        }
     };
 
     const filteredCommissions = getFilteredCommissions();
@@ -181,7 +183,7 @@ export default function ManagerDashboard() {
                 return (
                     <div className="space-y-6">
                         {/* Summary Cards */}
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                             {stats.map((stat, i) => (
                                 <div key={i} className="bg-white rounded-lg shadow p-6">
                                     <div className="flex items-start justify-between mb-4">
@@ -233,7 +235,7 @@ export default function ManagerDashboard() {
 
                         {/* Charts Row */}
                         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                            {/* Team Performance Chart Placeholders for now since we need more complex data */}
+                            {/* Team Performance Chart Placeholders */}
                             <div className="bg-white rounded-lg shadow p-6">
                                 <h2 className="text-xl mb-6">Team Performance</h2>
                                 <div className="h-[300px] flex items-center justify-center bg-gray-50 text-gray-400">
@@ -419,6 +421,66 @@ export default function ManagerDashboard() {
                 );
 
             case 'review':
+                const pendingCommissions = commissions.filter(c => c.status === 'pending');
+
+                return (
+                    <div className="bg-white rounded-lg shadow p-6">
+                        <div className="flex items-center justify-between mb-6">
+                            <h2 className="text-xl font-semibold">Review Pending Commissions</h2>
+                            <Button variant="outline" onClick={() => setActiveView('dashboard')}>Back to Dashboard</Button>
+                        </div>
+
+                        {pendingCommissions.length === 0 ? (
+                            <div className="text-center py-12 text-gray-500">
+                                <CheckCircle className="w-12 h-12 mx-auto mb-3 text-green-500 opacity-50" />
+                                <p>All caught up! No pending commissions to review.</p>
+                            </div>
+                        ) : (
+                            <div className="overflow-x-auto">
+                                <table className="w-full">
+                                    <thead className="bg-[#F4F4F4]">
+                                        <tr>
+                                            <th className="px-6 py-3 text-left text-xs text-gray-600 uppercase tracking-wider">Date</th>
+                                            <th className="px-6 py-3 text-left text-xs text-gray-600 uppercase tracking-wider">Consultant</th>
+                                            <th className="px-6 py-3 text-left text-xs text-gray-600 uppercase tracking-wider">Client / Product</th>
+                                            <th className="px-6 py-3 text-left text-xs text-gray-600 uppercase tracking-wider">Amount</th>
+                                            <th className="px-6 py-3 text-left text-xs text-gray-600 uppercase tracking-wider">Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="bg-white divide-y divide-gray-200">
+                                        {pendingCommissions.map((commission) => (
+                                            <tr key={commission.id} className="hover:bg-gray-50">
+                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                                    {commission.paymentDate}
+                                                </td>
+                                                <td className="px-6 py-4 whitespace-nowrap">
+                                                    <div className="text-sm font-medium text-gray-900">{commission.consultantName}</div>
+                                                    <div className="text-xs text-gray-500">{commission.consultantId}</div>
+                                                </td>
+                                                <td className="px-6 py-4 whitespace-nowrap">
+                                                    <div className="text-sm text-gray-900">{commission.clientName}</div>
+                                                    <div className="text-xs text-gray-500">{commission.productType}</div>
+                                                </td>
+                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                                    S$ {commission.commissionAmount.toLocaleString()}
+                                                </td>
+                                                <td className="px-6 py-4 whitespace-nowrap">
+                                                    <StatusActionButton
+                                                        currentStatus={commission.status}
+                                                        userRole="manager"
+                                                        onAuthorize={() => handleStatusUpdate(commission.id, 'authorized')}
+                                                        onReject={() => handleStatusUpdate(commission.id, 'rejected')}
+                                                    />
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        )}
+                    </div>
+                );
+
             case 'reports':
                 return (
                     <div className="bg-white rounded-lg shadow p-6">
@@ -440,9 +502,11 @@ export default function ManagerDashboard() {
     }
 
     return (
-        <div className="w-full">
-            <h1 className="text-2xl font-bold tracking-tight mb-4">Manager Dashboard</h1>
-            {renderMainContent()}
-        </div>
+        <RoleGuard allowedRoles={['manager', 'admin']}>
+            <div className="w-full">
+                <h1 className="text-2xl font-bold tracking-tight mb-4">Manager Dashboard</h1>
+                {renderMainContent()}
+            </div>
+        </RoleGuard>
     );
 }

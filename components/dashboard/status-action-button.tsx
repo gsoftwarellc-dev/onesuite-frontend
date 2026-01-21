@@ -24,7 +24,9 @@ export function StatusActionButton({
     disabled = false,
 }: StatusActionButtonProps) {
     // Finance/Admin can authorize (pending → authorized) and mark as paid (approved → paid)
-    if (userRole === 'finance' || userRole === 'admin') {
+    // Finance/Admin/Manager can authorize/approve (pending → authorized)
+    // Assuming Manager approval moves it to 'authorized' for Director/Finance review
+    if (userRole === 'finance' || userRole === 'admin' || userRole === 'manager') {
         if (currentStatus === 'pending') {
             return (
                 <div className="flex gap-2">
@@ -34,7 +36,7 @@ export function StatusActionButton({
                         className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                         <Shield className="w-4 h-4" />
-                        <span>Authorize</span>
+                        <span>{userRole === 'manager' ? 'Approve' : 'Authorize'}</span>
                     </button>
                     <button
                         onClick={onReject}

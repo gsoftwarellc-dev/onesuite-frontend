@@ -2,14 +2,14 @@
 
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { authService, User, LoginResponse } from '@/services/authService';
-import { tokenStore } from '@/lib/tokenStore';
+import { authService, User } from '@/services/authService';
+import { getAccessToken, setAccessToken, setRefreshToken, clearTokens } from '@/lib/authTokens';
 
 interface AuthContextType {
     user: User | null;
     isAuthenticated: boolean;
     isLoading: boolean;
-    login: (email: string, password: string) => Promise<void>;
+    login: (username: string, password: string) => Promise<void>;
     logout: () => void;
     refreshUserData: () => Promise<void>;
 }
@@ -24,17 +24,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // Initialize auth state on mount
     useEffect(() => {
         const initializeAuth = async () => {
-            const accessToken = tokenStore.getAccessToken();
+            const accessToken = getAccessToken();
 
             if (accessToken) {
                 try {
                     // Validate token by fetching current user
-                    const userData = await authService.getCurrentUser();
+                    const userData = await authService.getMe();
                     setUser(userData);
                 } catch (error) {
                     console.error('Failed to validate token:', error);
                     // Token is invalid, clear it
-                    tokenStore.clearTokens();
+                    clearTokens();
                 }
             }
 
@@ -46,47 +46,59 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     /**
      * Login user with email and password
-     * Stores tokens via TokenStore abstraction
      */
-    const login = async (email: string, password: string): Promise<void> => {
+    const login = async (username: string, password: string): Promise<void> => {
         try {
-            const response: LoginResponse = await authService.login(email, password);
+            // Note: API wrapper calls it 'username' typically
+            const response = await authService.login(username, password);
 
-            // Store tokens using TokenStore abstraction
-            tokenStore.setTokens(response.access_token, response.refresh_token);
+            // Store tokens
+            // Ensure response keys match what backend sends. Assuming { access, refresh } based on simplejwt default
+            // If backend sends { access_token, refresh_token }, we need to map it.
+            // Using 'any' cast if needed to be safe or assuming updated authService types match.
+            // My authService types say 'access' and 'refresh'.
+            setAccessToken((response as any).access || (response as any).access_token);
+            setRefreshToken((response as any).refresh || (response as any).refresh_token);
 
             // Set user state
-            setUser(response.user);
+            // If login response includes user
+            if ((response as any).user) {
+                setUser((response as any).user);
+            } else {
+                // If not, fetch it
+                const userData = await authService.getMe();
+                setUser(userData);
+            }
 
             // Redirect based on role
-            const roleRoutes: Record<string, string> = {
-                consultant: '/consultant',
-                manager: '/manager',
-                finance: '/finance',
-                director: '/director',
-                admin: '/finance', // Admin goes to finance dashboard
-            };
+            // Careful with User type, make sure it has 'role'
+            const userRole = (response as any).user?.role || user?.role;
+            if (userRole) {
+                const roleRoutes: Record<string, string> = {
+                    consultant: '/consultant',
+                    manager: '/manager',
+                    finance: '/finance',
+                    director: '/director',
+                    admin: '/finance',
+                };
+                const redirectPath = roleRoutes[userRole] || '/consultant';
+                router.push(redirectPath);
+            } else {
+                router.push('/consultant');
+            }
 
-            const redirectPath = roleRoutes[response.user.role] || '/consultant';
-            router.push(redirectPath);
         } catch (error) {
             console.error('Login failed:', error);
-            throw error; // Let the UI handle the error
+            throw error;
         }
     };
 
     /**
      * Logout user
-     * Clears tokens and redirects to login
      */
     const logout = () => {
-        // Call backend logout (optional)
-        authService.logout().catch(err => {
-            console.warn('Backend logout failed:', err);
-        });
-
         // Clear tokens
-        tokenStore.clearTokens();
+        clearTokens();
 
         // Clear user state
         setUser(null);
@@ -100,7 +112,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
      */
     const refreshUserData = async (): Promise<void> => {
         try {
-            const userData = await authService.getCurrentUser();
+            const userData = await authService.getMe();
             setUser(userData);
         } catch (error) {
             console.error('Failed to refresh user data:', error);
