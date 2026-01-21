@@ -24,17 +24,22 @@ interface RoleGuardProps {
 export function RoleGuard({ children, allowedRoles }: RoleGuardProps) {
     const { user } = useAuth();
     const router = useRouter();
+    const normalizedRole = user?.role ? user.role.toLowerCase() : '';
+    const hasAccess = !!user && (
+        allowedRoles.includes(normalizedRole as UserRole) ||
+        (user.is_manager && allowedRoles.includes('manager'))
+    );
 
     useEffect(() => {
-        if (user && !allowedRoles.includes(user.role as UserRole)) {
+        if (user && !hasAccess) {
             // User is authenticated but doesn't have permission
             // Redirect to access denied page
             router.push('/access-denied');
         }
-    }, [user, allowedRoles, router]);
+    }, [user, hasAccess, router]);
 
     // If user doesn't have permission, don't render children (redirect will happen)
-    if (user && !allowedRoles.includes(user.role as UserRole)) {
+    if (user && !hasAccess) {
         return null;
     }
 

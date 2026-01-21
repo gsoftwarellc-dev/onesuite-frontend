@@ -16,6 +16,17 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+const KNOWN_ROLES = new Set(['consultant', 'manager', 'finance', 'director', 'admin']);
+
+const normalizeUser = (rawUser: User | null): User | null => {
+    if (!rawUser) return rawUser;
+    const roleValue = rawUser.role ? rawUser.role.toLowerCase() : '';
+    const normalizedRole = KNOWN_ROLES.has(roleValue)
+        ? roleValue
+        : (rawUser.is_manager ? 'manager' : roleValue);
+    return { ...rawUser, role: normalizedRole };
+};
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
     const [user, setUser] = useState<User | null>(null);
     const [isLoading, setIsLoading] = useState(true);
@@ -30,7 +41,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 try {
                     // Validate token by fetching current user
                     const userData = await authService.getMe();
-                    setUser(userData);
+                    setUser(normalizeUser(userData));
                 } catch (error) {
                     console.error('Failed to validate token:', error);
                     // Token is invalid, clear it
@@ -51,6 +62,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         try {
             // Note: API wrapper calls it 'username' typically
             const response = await authService.login(username, password);
+            let resolvedUser: User | null = null;
 
             // Store tokens
             // Ensure response keys match what backend sends. Assuming { access, refresh } based on simplejwt default
@@ -63,16 +75,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             // Set user state
             // If login response includes user
             if ((response as any).user) {
-                setUser((response as any).user);
+                resolvedUser = normalizeUser((response as any).user);
+                setUser(resolvedUser);
             } else {
                 // If not, fetch it
                 const userData = await authService.getMe();
-                setUser(userData);
+                resolvedUser = normalizeUser(userData);
+                setUser(resolvedUser);
             }
 
             // Redirect based on role
             // Careful with User type, make sure it has 'role'
-            const userRole = (response as any).user?.role || user?.role;
+            const userRole = resolvedUser?.role || user?.role;
             if (userRole) {
                 const roleRoutes: Record<string, string> = {
                     consultant: '/consultant',
@@ -113,7 +127,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const refreshUserData = async (): Promise<void> => {
         try {
             const userData = await authService.getMe();
-            setUser(userData);
+            setUser(normalizeUser(userData));
         } catch (error) {
             console.error('Failed to refresh user data:', error);
             // If refresh fails, logout
