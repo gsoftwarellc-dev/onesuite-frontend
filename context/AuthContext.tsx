@@ -20,7 +20,7 @@ const KNOWN_ROLES = new Set(['consultant', 'manager', 'finance', 'director', 'ad
 
 const normalizeUser = (rawUser: User | null): User | null => {
     if (!rawUser) return rawUser;
-    const roleValue = rawUser.role ? rawUser.role.toLowerCase() : '';
+    const roleValue = rawUser.role ? rawUser.role.trim().toLowerCase() : '';
     const normalizedRole = KNOWN_ROLES.has(roleValue)
         ? roleValue
         : (rawUser.is_manager ? 'manager' : roleValue);

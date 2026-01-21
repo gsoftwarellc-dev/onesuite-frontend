@@ -24,7 +24,7 @@ interface RoleGuardProps {
 export function RoleGuard({ children, allowedRoles }: RoleGuardProps) {
     const { user } = useAuth();
     const router = useRouter();
-    const normalizedRole = user?.role ? user.role.toLowerCase() : '';
+    const normalizedRole = user?.role ? user.role.trim().toLowerCase() : '';
     const hasAccess = !!user && (
         allowedRoles.includes(normalizedRole as UserRole) ||
         (user.is_manager && allowedRoles.includes('manager'))
