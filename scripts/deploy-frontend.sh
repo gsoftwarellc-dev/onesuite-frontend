@@ -12,7 +12,7 @@ ARTIFACT_REGISTRY="asia-southeast1-docker.pkg.dev"
 REPOSITORY="onesuite"
 
 # Environment variables
-BACKEND_API_URL="https://onesuite-backend-862255014313.asia-southeast1.run.app/api"
+BACKEND_API_URL="https://onesuite-backend-86225501431.asia-southeast1.run.app/api"
 
 # Colors for output
 GREEN='\033[0;32m'

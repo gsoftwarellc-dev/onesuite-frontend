@@ -1,8 +1,13 @@
 import axios, { AxiosError } from 'axios';
 import { getAccessToken, getRefreshToken, setAccessToken, setRefreshToken, clearTokens } from './authTokens';
 
+const apiBaseUrl =
+    process.env.NEXT_PUBLIC_API_BASE_URL ||
+    process.env.NEXT_PUBLIC_API_URL ||
+    'http://localhost:8000/api';
+
 const api = axios.create({
-    baseURL: process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000/api',
+    baseURL: apiBaseUrl,
     headers: {
         'Content-Type': 'application/json',
     },
@@ -34,7 +39,7 @@ api.interceptors.response.use(
                     // Attempt to refresh token
                     // Use a new axios instance to avoid interceptor loops
                     const response = await axios.post(
-                        `${process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000/api'}/users/auth/refresh/`,
+                        `${apiBaseUrl}/users/auth/refresh/`,
                         { refresh: refreshToken }
                     );
 
@@ -86,4 +91,3 @@ api.interceptors.response.use(
 );
 
 export default api;
-

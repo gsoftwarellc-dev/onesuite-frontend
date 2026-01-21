@@ -77,7 +77,7 @@ gcloud run deploy $SERVICE_NAME \
     --timeout 300 \
     --max-instances 10 \
     --min-instances 0 \
-    --set-env-vars "NEXT_PUBLIC_API_URL=$BACKEND_URL" \
+    --set-env-vars "NEXT_PUBLIC_API_BASE_URL=$BACKEND_URL" \
     --set-env-vars "NODE_ENV=production" \
     --set-env-vars "NEXT_TELEMETRY_DISABLED=1"
 
