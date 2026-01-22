@@ -8,8 +8,8 @@ export default function ManagerLayout({
     children: React.ReactNode
 }) {
     return (
-        <RoleGuard allowedRoles={['manager', 'director', 'admin']}>
+        <>
             {children}
-        </RoleGuard>
+        </>
     );
 }
