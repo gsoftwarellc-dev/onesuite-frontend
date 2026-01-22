@@ -133,13 +133,13 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         },
         {
             title: "Approvals", // "manager → approvals"
-            url: "/approvals",
+            url: "/manager?view=review",
             icon: CheckCircle, // Need to ensure imported or use accessible icon
             roles: ["manager", "finance", "director"],
         },
         {
             title: "Team", // "manager → team"
-            url: "/team",
+            url: "/manager?view=team",
             icon: Users,
             roles: ["manager", "director"],
         },

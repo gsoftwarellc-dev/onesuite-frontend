@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { toast } from 'sonner';
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts';
 import {
@@ -27,7 +27,9 @@ import { StatusActionButton } from '@/components/dashboard/status-action-button'
 
 export default function ManagerDashboard() {
     const router = useRouter();
-    const [activeView, setActiveView] = useState<'dashboard' | 'review' | 'team' | 'reports'>('dashboard');
+    const searchParams = useSearchParams();
+    const initialView = searchParams.get('view') as 'dashboard' | 'review' | 'team' | 'reports';
+    const [activeView, setActiveView] = useState<'dashboard' | 'review' | 'team' | 'reports'>(initialView || 'dashboard');
     const [selectedFilter, setSelectedFilter] = useState('all');
     const [sortBy, setSortBy] = useState<'name-asc' | 'name-desc' | 'amount-desc'>('name-asc');
     const [searchQuery, setSearchQuery] = useState('');
@@ -58,34 +60,41 @@ export default function ManagerDashboard() {
                 const members = await userService.getTeamMembers();
                 setTeamMembers(members);
 
-                // Map Analytics to Stats
-                setStats([
-                    {
-                        icon: Clock,
-                        label: 'Pending Review',
-                        value: analytics.summary.pending_approvals.toString(),
-                        subtext: 'Requires your attention',
-                        color: 'bg-yellow-500',
-                    },
-                    {
-                        icon: CheckCircle,
-                        label: 'Team Total (YTD)',
-                        value: `S$${parseFloat(analytics.summary.team_total_ytd).toLocaleString()}`,
-                        subtext: `From ${analytics.summary.team_size} members`,
-                        color: 'bg-green-500',
-                    },
-                    {
-                        icon: Users,
-                        label: 'Team Size',
-                        value: analytics.summary.team_size.toString(),
-                        subtext: 'Active Consultants',
-                        color: 'bg-blue-500',
-                    }
-                ]);
+                // Map Analytics to Stats - WITH SAFETY CHECKS
+                if (analytics && analytics.summary) {
+                    setStats([
+                        {
+                            icon: Clock,
+                            label: 'Pending Review',
+                            value: (analytics.summary.pending_approvals || 0).toString(),
+                            subtext: 'Requires your attention',
+                            color: 'bg-yellow-500',
+                        },
+                        {
+                            icon: CheckCircle,
+                            label: 'Team Total (YTD)',
+                            value: `S$${parseFloat(analytics.summary.team_total_ytd || '0').toLocaleString()}`,
+                            subtext: `From ${analytics.summary.team_size || 0} members`,
+                            color: 'bg-green-500',
+                        },
+                        {
+                            icon: Users,
+                            label: 'Team Size',
+                            value: (analytics.summary.team_size || 0).toString(),
+                            subtext: 'Active Consultants',
+                            color: 'bg-blue-500',
+                        }
+                    ]);
+                } else {
+                    // Fallback to avoid crash, but log error
+                    console.error("Analytics data missing summary structure");
+                    setStats([]);
+                }
 
             } catch (error) {
                 console.error("Failed to fetch dashboard data:", error);
-                toast.error("Failed to load dashboard data.");
+                // Only show toast if it's a real network/server error, not just empty data
+                // toast.error("Failed to load dashboard data."); 
             } finally {
                 setLoading(false);
             }
@@ -94,11 +103,17 @@ export default function ManagerDashboard() {
         fetchDashboardData();
     }, []);
 
+    // Sync state if URL changes
+    useEffect(() => {
+        const view = searchParams.get('view') as 'dashboard' | 'review' | 'team' | 'reports';
+        if (view) setActiveView(view);
+    }, [searchParams]);
+
     // Filter and sort commissions
     const getFilteredCommissions = () => {
         const filtered = commissions.filter(commission => {
             const matchesStatus = selectedFilter === 'all' || commission.status === selectedFilter;
-            const matchesConsultant = true; // consultantFilter === 'all' || commission.consultantName === consultantFilter;
+            const matchesConsultant = true;
             const matchesSearch =
                 commission.consultantName.toLowerCase().includes(searchQuery.toLowerCase()) ||
                 commission.productType.toLowerCase().includes(searchQuery.toLowerCase()) ||

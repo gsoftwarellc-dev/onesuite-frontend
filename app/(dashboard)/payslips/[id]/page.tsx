@@ -17,7 +17,7 @@ export default function PayslipDetail({ params }: { params: { id: string } }) {
     const [selectedMonth, setSelectedMonth] = useState(params.id || '2025-12');
 
     // UNCOMMENT when logo is available or use a placeholder
-    // const logo = '/logo.png'; 
+    const logo = '/logo.png';
 
     // NOTE: This is a UI template. Backend payslip API not yet implemented.
     // When implemented, fetch data based on params.id from /api/payslips/{id}
@@ -120,8 +120,7 @@ export default function PayslipDetail({ params }: { params: { id: string } }) {
                     <div className="border-b-4 border-[#F4323D] p-10 print:p-12">
                         <div className="flex items-start justify-between mb-8">
                             <div className="flex items-start gap-4">
-                                {/* <img src={logo} alt="One Suite Advisory" className="h-16 w-16" /> */}
-                                <div className="h-16 w-16 bg-gray-100 rounded-lg flex items-center justify-center text-gray-400 text-xs">Logo</div>
+                                <img src={logo} alt="One Suite Advisory" className="h-16 w-16 object-contain" />
                                 <div>
                                     <h1 className="text-2xl mb-2 text-gray-900">One Suite Advisory Pte Ltd</h1>
                                     <p className="text-sm text-gray-600 mb-0.5">123 Robinson Road, #15-01</p>
