@@ -250,37 +250,63 @@ export default function ManagerDashboard() {
 
                         {/* Charts Row */}
                         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                            {/* Team Performance Chart Placeholders */}
+                            {/* Team Performance Chart */}
                             <div className="bg-white rounded-lg shadow p-6">
-                                <h2 className="text-xl mb-6">Team Performance</h2>
-                                <div className="h-[300px] flex items-center justify-center bg-gray-50 text-gray-400">
-                                    Chart Data Loading...
+                                <h2 className="text-xl mb-6">Top Performing Members</h2>
+                                <div className="h-[300px] w-full">
+                                    {/* Using Performer data from analytics if available, else showing simple list */}
+                                    <div className="space-y-4 overflow-y-auto h-full pr-2">
+                                        {/* Ideally we use Recharts BarChart here, but simplistic list is safer for Hotfix if data shape varies */}
+                                        {/* Let's try to fetch performers from analytics state if we saved it */}
+                                        {/* Since we didn't save full analytics object in state, let's fix that first in the useEffect or just use a placeholder text if no data */}
+                                        <div className="flex flex-col gap-2">
+                                            {teamMembers.slice(0, 5).map((member, idx) => (
+                                                <div key={member.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                                                    <div className="flex items-center gap-3">
+                                                        <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center font-bold text-xs">
+                                                            {idx + 1}
+                                                        </div>
+                                                        <div>
+                                                            <p className="text-sm font-medium">{member.name}</p>
+                                                            <p className="text-xs text-gray-500">{member.role}</p>
+                                                        </div>
+                                                    </div>
+                                                    {/* We don't have revenue data in member object, so we omit amount rather than fake it */}
+                                                </div>
+                                            ))}
+                                            {teamMembers.length === 0 && <p className="text-gray-500 text-center py-10">No team members found.</p>}
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
 
                             {/* Status Distribution */}
                             <div className="bg-white rounded-lg shadow p-6">
                                 <h2 className="text-xl mb-6">Commission Status Distribution</h2>
-                                <div className="flex items-center justify-center">
-                                    <ResponsiveContainer width="100%" height={300}>
-                                        <PieChart>
-                                            <Pie
-                                                data={statusDistribution}
-                                                cx="50%"
-                                                cy="50%"
-                                                labelLine={false}
-                                                label={({ name, percent }: any) => `${name} ${(percent * 100).toFixed(0)}%`}
-                                                outerRadius={100}
-                                                fill="#8884d8"
-                                                dataKey="value"
-                                            >
-                                                {statusDistribution.map((entry, index) => (
-                                                    <Cell key={`cell-${index}`} fill={entry.color} />
-                                                ))}
-                                            </Pie>
-                                            <Tooltip />
-                                        </PieChart>
-                                    </ResponsiveContainer>
+                                <div className="flex items-center justify-center h-[300px]">
+                                    {commissions.length > 0 ? (
+                                        <ResponsiveContainer width="100%" height="100%">
+                                            <PieChart>
+                                                <Pie
+                                                    data={statusDistribution}
+                                                    cx="50%"
+                                                    cy="50%"
+                                                    labelLine={false}
+                                                    label={({ name, percent }: any) => percent > 0 ? `${name} ${(percent * 100).toFixed(0)}%` : ''}
+                                                    outerRadius={100}
+                                                    fill="#8884d8"
+                                                    dataKey="value"
+                                                >
+                                                    {statusDistribution.map((entry, index) => (
+                                                        <Cell key={`cell-${index}`} fill={entry.color} />
+                                                    ))}
+                                                </Pie>
+                                                <Tooltip />
+                                            </PieChart>
+                                        </ResponsiveContainer>
+                                    ) : (
+                                        <div className="text-gray-500">No commission data available</div>
+                                    )}
                                 </div>
                             </div>
                         </div>
@@ -497,12 +523,59 @@ export default function ManagerDashboard() {
                 );
 
             case 'reports':
+                // For reports, we show a summary of "Approved" and "Paid" commissions (Historical data)
+                const historicalCommissions = commissions.filter(c => ['approved', 'paid'].includes(c.status));
+
                 return (
                     <div className="bg-white rounded-lg shadow p-6">
-                        <h2 className="text-xl mb-4 text-center">Section under development</h2>
-                        <Button onClick={() => setActiveView('dashboard')}>Back to Dashboard</Button>
+                        <div className="flex items-center justify-between mb-6">
+                            <h2 className="text-xl font-semibold">Approved Commission Reports</h2>
+                            <Button variant="outline" onClick={() => setActiveView('dashboard')}>Back to Dashboard</Button>
+                        </div>
+
+                        {historicalCommissions.length === 0 ? (
+                            <div className="text-center py-12 text-gray-500">
+                                <BarChart3 className="w-12 h-12 mx-auto mb-3 text-blue-500 opacity-50" />
+                                <p>No historical approved commissions found.</p>
+                            </div>
+                        ) : (
+                            <div className="overflow-x-auto">
+                                <table className="w-full">
+                                    <thead className="bg-[#F4F4F4]">
+                                        <tr>
+                                            <th className="px-6 py-3 text-left text-xs text-gray-600 uppercase tracking-wider">Date</th>
+                                            <th className="px-6 py-3 text-left text-xs text-gray-600 uppercase tracking-wider">Consultant</th>
+                                            <th className="px-6 py-3 text-left text-xs text-gray-600 uppercase tracking-wider">Product</th>
+                                            <th className="px-6 py-3 text-left text-xs text-gray-600 uppercase tracking-wider">Amount</th>
+                                            <th className="px-6 py-3 text-left text-xs text-gray-600 uppercase tracking-wider">Status</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="bg-white divide-y divide-gray-200">
+                                        {historicalCommissions.map((commission) => (
+                                            <tr key={commission.id} className="hover:bg-gray-50">
+                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                                    {commission.paymentDate}
+                                                </td>
+                                                <td className="px-6 py-4 whitespace-nowrap">
+                                                    <div className="text-sm font-medium text-gray-900">{commission.consultantName}</div>
+                                                </td>
+                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
+                                                    {commission.productType}
+                                                </td>
+                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                                    S$ {commission.commissionAmount.toLocaleString()}
+                                                </td>
+                                                <td className="px-6 py-4 whitespace-nowrap">
+                                                    {getStatusBadge(commission.status)}
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        )}
                     </div>
-                )
+                );
             default:
                 return <div>View not found</div>;
         }

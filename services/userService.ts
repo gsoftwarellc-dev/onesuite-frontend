@@ -29,5 +29,11 @@ export const userService = {
     updateProfile: async (data: Partial<User>) => {
         const response = await api.patch<User>('/users/me', data);
         return response.data;
+    },
+
+    // Change Password
+    changePassword: async (data: any) => {
+        const response = await api.post('/users/set_password/', data);
+        return response.data;
     }
 };

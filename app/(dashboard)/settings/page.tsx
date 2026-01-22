@@ -1,10 +1,20 @@
 "use client";
 
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { User, Mail, Phone, Calendar, Shield } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useAuth } from '@/context/AuthContext';
+import { userService } from '@/services/userService';
+import { toast } from 'sonner';
+import {
+    Dialog,
+    DialogContent,
+    DialogHeader,
+    DialogTitle,
+    DialogTrigger,
+} from "@/components/ui/dialog";
 
 export default function SettingsPage() {
     const router = useRouter();
@@ -68,18 +78,97 @@ export default function SettingsPage() {
                     <h2 className="text-xl font-semibold">Security</h2>
                 </div>
                 <div className="p-6 space-y-4">
-                    <Button variant="outline" className="w-full md:w-auto">
-                        Change Password
-                    </Button>
-                    <Button
-                        variant="destructive"
-                        onClick={logout}
-                        className="w-full md:w-auto bg-red-600 hover:bg-red-700"
-                    >
-                        Sign Out
-                    </Button>
+                    <div className="flex flex-col md:flex-row gap-4 items-center">
+                        <ChangePasswordDialog />
+                        <Button
+                            variant="destructive"
+                            onClick={logout}
+                            className="w-full md:w-auto bg-red-600 hover:bg-red-700"
+                        >
+                            Sign Out
+                        </Button>
+                    </div>
                 </div>
             </div>
         </div>
+    );
+}
+
+function ChangePasswordDialog() {
+    const [open, setOpen] = useState(false);
+    const [loading, setLoading] = useState(false);
+    const [formData, setFormData] = useState({
+        current_password: '',
+        new_password: '',
+        confirm_password: ''
+    });
+
+    const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (formData.new_password !== formData.confirm_password) {
+            toast.error("New passwords do not match");
+            return;
+        }
+
+        try {
+            setLoading(true);
+            await userService.changePassword({
+                current_password: formData.current_password,
+                new_password: formData.new_password
+            });
+            toast.success("Password changed successfully");
+            setOpen(false);
+            setFormData({ current_password: '', new_password: '', confirm_password: '' });
+        } catch (error: any) {
+            console.error("Password change failed:", error);
+            toast.error(error.response?.data?.detail || "Failed to change password. check current password.");
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    return (
+        <Dialog open={open} onOpenChange={setOpen}>
+            <DialogTrigger asChild>
+                <Button variant="outline" className="w-full md:w-auto">Change Password</Button>
+            </DialogTrigger>
+            <DialogContent>
+                <DialogHeader>
+                    <DialogTitle>Change Password</DialogTitle>
+                </DialogHeader>
+                <form onSubmit={handleSubmit} className="space-y-4 mt-4">
+                    <div>
+                        <Input
+                            type="password"
+                            placeholder="Current Password"
+                            value={formData.current_password}
+                            onChange={(e) => setFormData(prev => ({ ...prev, current_password: e.target.value }))}
+                            required
+                        />
+                    </div>
+                    <div>
+                        <Input
+                            type="password"
+                            placeholder="New Password"
+                            value={formData.new_password}
+                            onChange={(e) => setFormData(prev => ({ ...prev, new_password: e.target.value }))}
+                            required
+                        />
+                    </div>
+                    <div>
+                        <Input
+                            type="password"
+                            placeholder="Confirm New Password"
+                            value={formData.confirm_password}
+                            onChange={(e) => setFormData(prev => ({ ...prev, confirm_password: e.target.value }))}
+                            required
+                        />
+                    </div>
+                    <Button type="submit" className="w-full bg-[#F4323D] hover:bg-[#d62d37]" disabled={loading}>
+                        {loading ? "Updating..." : "Update Password"}
+                    </Button>
+                </form>
+            </DialogContent>
+        </Dialog>
     );
 }
