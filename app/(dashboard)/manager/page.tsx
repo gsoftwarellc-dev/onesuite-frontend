@@ -590,7 +590,7 @@ export default function ManagerDashboard() {
     }
 
     return (
-        <RoleGuard allowedRoles={['manager', 'admin']}>
+        <RoleGuard allowedRoles={['manager', 'admin', 'finance', 'director']}>
             <div className="w-full">
                 <h1 className="text-2xl font-bold tracking-tight mb-4">Manager Dashboard</h1>
                 {renderMainContent()}
