@@ -333,9 +333,11 @@ const TeamView = () => {
                 const mappedMembers = data.map((item: any) => ({
                     id: item.consultant.id.toString(),
                     name: item.consultant.username,
-                    role: 'Consultant', // Default role
-                    status: 'Active', // Assume active if returned
-                    totalSales: parseFloat(item.total_sales || '0'),
+                    role: 'Consultant',
+                    status: 'Active',
+                    // Use 'total_sales_volume' for YTD Sales (Gross), or 'total_commission_earned' for earnings
+                    // Usually Managers want to see Gross Sales Volume of their team
+                    totalSales: parseFloat(item.total_sales_volume || '0'),
                     pendingCommissions: item.pending_count || 0
                 }));
                 setTeamMembers(mappedMembers);
