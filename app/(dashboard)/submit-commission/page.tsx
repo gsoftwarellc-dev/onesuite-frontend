@@ -238,8 +238,12 @@ export default function SubmitCommissionPage() {
             toast.success(`${successCount} commission ${successCount === 1 ? 'entry' : 'entries'} submitted successfully`);
 
         } catch (error: any) {
-            console.error("Submission failed:", error);
-            const msg = error.response?.data?.detail || error.response?.data?.message || "Failed to submit commission. Please try again.";
+            console.error("❌ Submission failed:", error);
+            console.error("Error response:", error.response);
+            console.error("Error data:", error.response?.data);
+            console.error("Error status:", error.response?.status);
+
+            const msg = error.response?.data?.detail || error.response?.data?.message || error.message || "Failed to submit commission. Please try again.";
             toast.error(msg);
         }
     };

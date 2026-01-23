@@ -207,8 +207,16 @@ export const commissionService = {
             notes: notes
         };
 
-        const response = await api.post<any>('/commissions/create/', backendPayload);
-        return response.data;
+        console.log('📤 Sending commission payload:', backendPayload);
+
+        try {
+            const response = await api.post<any>('/commissions/create/', backendPayload);
+            console.log('✅ Commission created:', response.data);
+            return response.data;
+        } catch (error: any) {
+            console.error('❌ API Error:', error.response?.data);
+            throw error;
+        }
     },
 
     // Update commission status (Authorize, Approve, Reject, Pay)
