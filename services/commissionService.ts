@@ -134,7 +134,6 @@ export const commissionService = {
         }
     },
 
-    // Get Team Commissions (Manager View)
     getTeamCommissions: async () => {
         try {
             const response = await api.get<any>('/commissions/my-team/');
@@ -145,6 +144,17 @@ export const commissionService = {
             return Array.isArray(response.data) ? response.data : [];
         } catch (error) {
             console.error('Error fetching team commissions:', error);
+            return [];
+        }
+    },
+
+    // Get Payslips (Aggregated Paid Commissions)
+    getPayslips: async () => {
+        try {
+            const response = await api.get<any>('/commissions/my-payslips/');
+            return Array.isArray(response.data) ? response.data : [];
+        } catch (error) {
+            console.error('Error fetching payslips:', error);
             return [];
         }
     },
