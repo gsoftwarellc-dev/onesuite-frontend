@@ -212,9 +212,8 @@ export default function SubmitCommissionPage() {
             let successCount = 0;
 
             for (const entry of entries) {
-                // Convert DD/MM/YYYY to YYYY-MM-DD
-                const [day, month, year] = entry.paymentDate.split('/');
-                const formattedDate = `${year}-${month}-${day}`;
+                // HTML5 date input already returns YYYY-MM-DD format
+                const formattedDate = entry.paymentDate;
 
                 await commissionService.createCommission({
                     clientName: entry.clientName,
