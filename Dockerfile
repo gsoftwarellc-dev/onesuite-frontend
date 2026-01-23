@@ -8,7 +8,7 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 
 # Install dependencies
-# Install dependencies
+# Install dependencies (full install needed for next.config.ts)
 RUN npm ci
 
 # Stage 2: Builder
