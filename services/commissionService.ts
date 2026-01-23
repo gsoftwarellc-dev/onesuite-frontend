@@ -1,6 +1,6 @@
 import api from '@/lib/api';
 
-export type CommissionStatus = 'pending' | 'authorized' | 'approved' | 'paid' | 'rejected' | 'processing';
+export type CommissionStatus = 'draft' | 'submitted' | 'pending' | 'authorized' | 'approved' | 'paid' | 'rejected' | 'processing';
 
 export interface Commission {
     id: string;
@@ -68,7 +68,7 @@ export const commissionService = {
             netRevenue: parseFloat(item.sale_amount),
             commissionRate: 0,
             commissionAmount: parseFloat(item.calculated_amount),
-            status: item.state as CommissionStatus,
+            status: (item.state === 'submitted' ? 'pending' : item.state) as CommissionStatus,
             statusHistory: [],
             submittedDate: item.created_at,
             notes: `Ref: ${item.reference_number}`
@@ -94,7 +94,7 @@ export const commissionService = {
             tieringPercentage: 15,
             overridingPercentage: 3,
 
-            status: item.commission.state as CommissionStatus,
+            status: (item.commission.state === 'submitted' ? 'pending' : item.commission.state) as CommissionStatus,
             statusHistory: [],
             submittedDate: item.created_at, // Approval creation date
             notes: `Approval Ref: ${item.id}`
