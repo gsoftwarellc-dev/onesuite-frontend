@@ -115,6 +115,28 @@ export default function ConsultantDashboard() {
         { name: 'Pending', value: statusCounts['Pending'] || 0, color: '#f59e0b' },  // Yellow/Orange
     ].filter(d => d.value > 0);
 
+    // Calculate total amounts for approved and pending commissions
+    const approvedAmount = commissions
+        .filter(c => ['approved', 'authorized'].includes(c.status.toLowerCase()))
+        .reduce((sum, c) => sum + c.commissionAmount, 0);
+
+    const pendingAmount = commissions
+        .filter(c => ['submitted', 'pending'].includes(c.status.toLowerCase()))
+        .reduce((sum, c) => sum + c.commissionAmount, 0);
+
+    const paidAmount = commissions
+        .filter(c => c.status.toLowerCase() === 'paid')
+        .reduce((sum, c) => sum + c.commissionAmount, 0);
+
+    // Get most recent paid commission date
+    const lastPaidCommission = commissions
+        .filter(c => c.status.toLowerCase() === 'paid')
+        .sort((a, b) => new Date(b.paymentDate).getTime() - new Date(a.paymentDate).getTime())[0];
+
+    const lastPaymentDate = lastPaidCommission
+        ? new Date(lastPaidCommission.paymentDate).toLocaleDateString('en-SG', { day: '2-digit', month: '2-digit', year: 'numeric' })
+        : 'No payments yet';
+
     // --- Helper for Stats Cards ---
     const StatsCard = ({ title, value, sub, icon: Icon, colorClass, trend, trendUp }: any) => (
         <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-100 relative overflow-hidden">
@@ -163,40 +185,31 @@ export default function ConsultantDashboard() {
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                     <StatsCard
                         title="Total Earned"
-                        value={`S$${parseFloat(summary.total_paid_ytd).toLocaleString()}`}
+                        value={`S$${parseFloat(summary.total_paid_ytd || '0').toLocaleString()}`}
                         sub="Year to Date"
                         icon={DollarSign}
                         colorClass="bg-blue-500"
-                        trend="12.5%"
-                        trendUp={true}
                     />
                     <StatsCard
                         title="Pending"
-                        value={`S$${parseFloat(summary.pending_amount).toLocaleString()}`}
+                        value={`S$${pendingAmount.toLocaleString()}`}
                         sub="Commissions awaiting review"
                         icon={Clock}
                         colorClass="bg-yellow-500"
-                        trend="8.2%"
-                        trendUp={false}
                     />
                     <StatsCard
                         title="Approved"
-                        value={`S$${(pieData.find(d => d.name === 'Approved')?.value || 0)} Commissions`}
+                        value={`S$${approvedAmount.toLocaleString()}`}
                         sub="Ready for payment"
                         icon={CheckCircle}
                         colorClass="bg-green-500"
-                        trend="5.3%"
-                        trendUp={true}
                     />
-                    {/* Fourth Card: Paid (Mocking 'Last Payment' logic if not in summary) */}
                     <StatsCard
                         title="Paid"
-                        value={`S$${parseFloat(summary.total_paid_ytd).toLocaleString()}`} // Using YTD as proxy for big number
-                        sub="Last payment: 28/12/2025"
+                        value={`S$${paidAmount.toLocaleString()}`}
+                        sub={`Last payment: ${lastPaymentDate}`}
                         icon={DollarSign}
                         colorClass="bg-purple-500"
-                        trend="15.7%"
-                        trendUp={true}
                     />
                 </div>
 
