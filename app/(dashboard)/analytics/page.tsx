@@ -105,7 +105,10 @@ export default function AnalyticsPage() {
                                 <CartesianGrid strokeDasharray="3 3" vertical={false} />
                                 <XAxis dataKey="month" fontSize={12} tickLine={false} axisLine={false} />
                                 <YAxis fontSize={12} tickLine={false} axisLine={false} tickFormatter={(value) => `$${value / 1000}k`} />
-                                <Tooltip formatter={(val: number) => [`S$ ${val.toLocaleString()}`, 'Revenue']} />
+                                <Tooltip formatter={(val: number | string | Array<number | string>) => [
+                                    typeof val === 'number' ? `S$ ${val.toLocaleString()}` : val,
+                                    'Revenue'
+                                ]} />
                                 <Line type="monotone" dataKey="amount" stroke="#2563eb" strokeWidth={2} dot={false} />
                             </LineChart>
                         </ResponsiveContainer>
