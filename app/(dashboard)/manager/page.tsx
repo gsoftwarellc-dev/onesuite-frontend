@@ -73,6 +73,7 @@ const DefaultDashboardView = ({
     statusFilter, setStatusFilter,
     teamFilter, setTeamFilter,
     consultantFilter, setConsultantFilter,
+    consultantOptions,
     filtersRef
 }: any) => {
     const router = useRouter();
