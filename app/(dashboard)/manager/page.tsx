@@ -269,7 +269,10 @@ const DefaultDashboardView = ({
                         {/* ... Other filters ... */}
                         <div className="relative min-w-[160px]">
                             <select className="w-full h-10 pl-9 pr-8 rounded-md border border-gray-200 bg-white text-sm focus:ring-2 focus:ring-[#F4323D] appearance-none cursor-pointer" value={consultantFilter} onChange={(e) => setConsultantFilter(e.target.value)}>
-                                <option>All Consultants</option><option>David Lee</option><option>Emily Zhang</option>
+                                <option>All Consultants</option>
+                                {consultantOptions && consultantOptions.map((name: string) => (
+                                    <option key={name} value={name}>{name}</option>
+                                ))}
                             </select>
                             <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
                             <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
@@ -536,9 +539,29 @@ function ManagerDashboardContent() {
     const [startDate, setStartDate] = useState('');
     const [endDate, setEndDate] = useState('');
 
+    const [consultantOptions, setConsultantOptions] = useState<string[]>([]);
+
     useEffect(() => {
         loadCommissions();
+        loadTeamOptions();
     }, []);
+
+    const loadTeamOptions = async () => {
+        try {
+            const teamData = await commissionService.getTeamCommissions();
+            // Extract unique consultant names
+            if (Array.isArray(teamData)) {
+                // Determine structure: Backend returns results: [{ consultant: { username: ... } }] 
+                // but service now might unwrap it. Safe check:
+                const names = teamData
+                    .map((m: any) => m.consultant?.username)
+                    .filter(Boolean); // Remove null/undefined
+                setConsultantOptions(Array.from(new Set(names))); // Unique
+            }
+        } catch (error) {
+            console.error('Failed to load team options', error);
+        }
+    };
 
     // Helper function to load/refresh commissions
     const loadCommissions = async () => {
@@ -599,6 +622,7 @@ function ManagerDashboardContent() {
             statusFilter={statusFilter} setStatusFilter={setStatusFilter}
             teamFilter={teamFilter} setTeamFilter={setTeamFilter}
             consultantFilter={consultantFilter} setConsultantFilter={setConsultantFilter}
+            consultantOptions={consultantOptions}
             filtersRef={filtersRef}
         />
     );
