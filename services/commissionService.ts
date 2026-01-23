@@ -138,8 +138,11 @@ export const commissionService = {
     getTeamCommissions: async () => {
         try {
             const response = await api.get<any>('/commissions/my-team/');
-            // Backend returns array of { consultant: User, total_sales, pending_count, ... }
-            return response.data || [];
+            // Backend returns { results: [...] } if valid, or [] if empty/error
+            if (response.data && Array.isArray(response.data.results)) {
+                return response.data.results;
+            }
+            return Array.isArray(response.data) ? response.data : [];
         } catch (error) {
             console.error('Error fetching team commissions:', error);
             return [];
