@@ -415,15 +415,14 @@ export default function SubmitCommissionPage() {
                                             {/* Date of Client's Payment */}
                                             <div>
                                                 <label className="block text-sm mb-2 text-gray-700">
-                                                    Date of Client's Payment (DD/MM/YYYY) <span className="text-red-500">*</span>
+                                                    Date of Client's Payment <span className="text-red-500">*</span>
                                                 </label>
                                                 <div className="relative">
-                                                    <Calendar className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                                                    <Calendar className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
                                                     <Input
-                                                        type="text"
+                                                        type="date"
                                                         value={entry.paymentDate}
                                                         onChange={(e) => updateEntry(entry.id, 'paymentDate', e.target.value)}
-                                                        placeholder="DD/MM/YYYY"
                                                         className="pl-9"
                                                     />
                                                 </div>
