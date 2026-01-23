@@ -19,8 +19,17 @@ import {
     MoreHorizontal,
     Calendar,
     XCircle,
-    Check
+    Check,
+    Eye
 } from 'lucide-react';
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogHeader,
+    DialogTitle,
+    DialogFooter,
+} from "@/components/ui/dialog";
 import {
     BarChart,
     Bar,
@@ -402,8 +411,99 @@ const TeamView = () => {
     );
 };
 
+
+const CommissionDetailDialog = ({
+    commission,
+    open,
+    onOpenChange,
+    onApprove,
+    onReject
+}: {
+    commission: Commission | null,
+    open: boolean,
+    onOpenChange: (open: boolean) => void,
+    onApprove: (id: string) => void,
+    onReject: (id: string) => void
+}) => {
+    if (!commission) return null;
+
+    return (
+        <Dialog open={open} onOpenChange={onOpenChange}>
+            <DialogContent className="sm:max-w-[600px]">
+                <DialogHeader>
+                    <DialogTitle>Commission Details</DialogTitle>
+                    <DialogDescription>
+                        Review details for COM-{commission.id} submitted by {commission.consultantName}
+                    </DialogDescription>
+                </DialogHeader>
+                <div className="grid grid-cols-2 gap-4 py-4">
+                    <div className="space-y-1">
+                        <p className="text-sm font-medium text-gray-500">Client Name</p>
+                        <p className="font-semibold text-gray-900">{commission.clientName || 'N/A'}</p>
+                    </div>
+                    <div className="space-y-1">
+                        <p className="text-sm font-medium text-gray-500">Product Type</p>
+                        <p className="font-semibold text-gray-900">{commission.productType}</p>
+                    </div>
+                    <div className="space-y-1">
+                        <p className="text-sm font-medium text-gray-500">Date</p>
+                        <p className="font-semibold text-gray-900">{commission.paymentDate}</p>
+                    </div>
+                    <div className="space-y-1">
+                        <p className="text-sm font-medium text-gray-500">Submission Date</p>
+                        <p className="font-semibold text-gray-900">{new Date(commission.submittedDate).toLocaleDateString()}</p>
+                    </div>
+                    <div className="col-span-2 border-t pt-4 mt-2">
+                        <h4 className="font-medium text-gray-900 mb-3">Financials</h4>
+                    </div>
+                    <div className="space-y-1">
+                        <p className="text-sm font-medium text-gray-500">Gross Revenue (Sale)</p>
+                        <p className="font-semibold text-gray-900">S$ {commission.grossRevenue?.toLocaleString()}</p>
+                    </div>
+                    <div className="space-y-1">
+                        <p className="text-sm font-medium text-gray-500">Commission Amount</p>
+                        <p className="font-bold text-[#F4323D] text-lg">S$ {commission.commissionAmount?.toLocaleString()}</p>
+                    </div>
+                    <div className="space-y-1">
+                        <p className="text-sm font-medium text-gray-500">SFA %</p>
+                        <p className="text-gray-900">{commission.sfaPercentage ? `${commission.sfaPercentage}%` : '-'}</p>
+                    </div>
+                    <div className="space-y-1">
+                        <p className="text-sm font-medium text-gray-500">Tiering %</p>
+                        <p className="text-gray-900">{commission.tieringPercentage ? `${commission.tieringPercentage}%` : '-'}</p>
+                    </div>
+                    <div className="space-y-1">
+                        <p className="text-sm font-medium text-gray-500">Override %</p>
+                        <p className="text-gray-900">{commission.overridingPercentage ? `${commission.overridingPercentage}%` : '-'}</p>
+                    </div>
+                </div>
+                <DialogFooter className="gap-2 sm:gap-0">
+                    <Button variant="outline" onClick={() => onOpenChange(false)}>Close</Button>
+                    <div className="flex gap-2">
+                        <Button
+                            variant="destructive"
+                            onClick={() => { onOpenChange(false); onReject(commission.id); }}
+                        >
+                            Reject
+                        </Button>
+                        <Button
+                            className="bg-green-600 hover:bg-green-700 text-white"
+                            onClick={() => { onOpenChange(false); onApprove(commission.id); }}
+                        >
+                            Approve
+                        </Button>
+                    </div>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+    );
+};
+
 const ApprovalsView = ({ commissions, onRefresh }: { commissions: Commission[], onRefresh: () => void }) => {
     const [loading, setLoading] = useState<string | null>(null);
+    const [selectedCommission, setSelectedCommission] = useState<Commission | null>(null);
+    const [detailOpen, setDetailOpen] = useState(false);
+
     // Check Status Logic: Pending commissions
     const pendingCommissions = commissions.filter(c => c.status === 'pending');
 
@@ -452,8 +552,21 @@ const ApprovalsView = ({ commissions, onRefresh }: { commissions: Commission[], 
         }
     };
 
+    const openDetail = (commission: Commission) => {
+        setSelectedCommission(commission);
+        setDetailOpen(true);
+    };
+
     return (
         <div className="space-y-6">
+            <CommissionDetailDialog
+                commission={selectedCommission}
+                open={detailOpen}
+                onOpenChange={setDetailOpen}
+                onApprove={handleApprove}
+                onReject={handleReject}
+            />
+
             <div className="flex justify-between items-center">
                 <h2 className="text-2xl font-bold text-gray-900">Pending Approvals</h2>
                 <span className="bg-yellow-100 text-yellow-800 text-sm font-bold px-3 py-1 rounded-full">
@@ -487,6 +600,15 @@ const ApprovalsView = ({ commissions, onRefresh }: { commissions: Commission[], 
                                         </span>
                                     </td>
                                     <td className="px-6 py-4 flex justify-center gap-2">
+                                        <Button
+                                            size="sm"
+                                            variant="outline"
+                                            className="h-8 w-8 p-0 rounded-full shadow-sm text-gray-500 hover:text-blue-600 hover:bg-blue-50"
+                                            onClick={() => openDetail(commission)}
+                                            title="View Details"
+                                        >
+                                            <Eye className="w-4 h-4" />
+                                        </Button>
                                         <Button
                                             size="sm"
                                             className="bg-green-600 hover:bg-green-700 text-white h-8 w-8 p-0 rounded-full shadow-sm"
