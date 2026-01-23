@@ -316,45 +316,85 @@ const DefaultDashboardView = ({
     );
 };
 
-const TeamView = () => (
-    <div className="space-y-6">
-        <h2 className="text-2xl font-bold text-gray-900">Team Management</h2>
-        <div className="bg-white rounded-lg shadow-sm border border-gray-100 overflow-hidden">
-            <table className="w-full text-sm text-left">
-                <thead className="bg-gray-50/50 text-xs font-bold text-gray-500 uppercase border-b border-gray-100">
-                    <tr>
-                        <th className="px-6 py-4">Name</th>
-                        <th className="px-6 py-4">Role</th>
-                        <th className="px-6 py-4">Status</th>
-                        <th className="px-6 py-4">Total Sales (YTD)</th>
-                        <th className="px-6 py-4">Pending Commissions</th>
-                        <th className="px-6 py-4 text-right">Actions</th>
-                    </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-50">
-                    {mockTeamMembers.map((member) => (
-                        <tr key={member.id} className="hover:bg-gray-50/50 transition-colors">
-                            <td className="px-6 py-4 font-medium text-gray-900">{member.name}</td>
-                            <td className="px-6 py-4 text-gray-600">{member.role}</td>
-                            <td className="px-6 py-4">
-                                <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${member.status === 'Active' ? 'bg-green-50 text-green-700 border border-green-100' : 'bg-gray-100 text-gray-600 border border-gray-200'}`}>
-                                    {member.status}
-                                </span>
-                            </td>
-                            <td className="px-6 py-4 text-gray-900 font-medium">S$ {member.totalSales.toLocaleString()}</td>
-                            <td className="px-6 py-4 text-gray-600">{member.pendingCommissions}</td>
-                            <td className="px-6 py-4 text-right">
-                                <Button variant="ghost" size="sm" className="h-8 text-gray-500" onClick={() => toast.info(`Viewing profile: ${member.name}`)}>
-                                    View Profile
-                                </Button>
-                            </td>
+const TeamView = () => {
+    const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        const loadTeam = async () => {
+            try {
+                const data = await commissionService.getTeamCommissions();
+                // Map backend response to TeamMember interface
+                // Backend format: { consultant: { id, username, email }, total_sales, commission_earned, pending_count }
+                const mappedMembers = data.map((item: any) => ({
+                    id: item.consultant.id.toString(),
+                    name: item.consultant.username,
+                    role: 'Consultant', // Default role
+                    status: 'Active', // Assume active if returned
+                    totalSales: parseFloat(item.total_sales || '0'),
+                    pendingCommissions: item.pending_count || 0
+                }));
+                setTeamMembers(mappedMembers);
+            } catch (error) {
+                console.error('Failed to load team data:', error);
+                toast.error('Failed to load team data');
+            } finally {
+                setLoading(false);
+            }
+        };
+        loadTeam();
+    }, []);
+
+    if (loading) return <LoadingSkeleton />;
+
+    return (
+        <div className="space-y-6">
+            <h2 className="text-2xl font-bold text-gray-900">Team Management</h2>
+            <div className="bg-white rounded-lg shadow-sm border border-gray-100 overflow-hidden">
+                <table className="w-full text-sm text-left">
+                    <thead className="bg-gray-50/50 text-xs font-bold text-gray-500 uppercase border-b border-gray-100">
+                        <tr>
+                            <th className="px-6 py-4">Name</th>
+                            <th className="px-6 py-4">Role</th>
+                            <th className="px-6 py-4">Status</th>
+                            <th className="px-6 py-4">Total Sales (YTD)</th>
+                            <th className="px-6 py-4">Pending Commissions</th>
+                            <th className="px-6 py-4 text-right">Actions</th>
                         </tr>
-                    ))}
-                </tbody>
-            </table>
+                    </thead>
+                    <tbody className="divide-y divide-gray-50">
+                        {teamMembers.length > 0 ? (
+                            teamMembers.map((member) => (
+                                <tr key={member.id} className="hover:bg-gray-50/50 transition-colors">
+                                    <td className="px-6 py-4 font-medium text-gray-900">{member.name}</td>
+                                    <td className="px-6 py-4 text-gray-600">{member.role}</td>
+                                    <td className="px-6 py-4">
+                                        <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${member.status === 'Active' ? 'bg-green-50 text-green-700 border border-green-100' : 'bg-gray-100 text-gray-600 border border-gray-200'}`}>
+                                            {member.status}
+                                        </span>
+                                    </td>
+                                    <td className="px-6 py-4 text-gray-900 font-medium">S$ {member.totalSales.toLocaleString()}</td>
+                                    <td className="px-6 py-4 text-gray-600">{member.pendingCommissions}</td>
+                                    <td className="px-6 py-4 text-right">
+                                        <Button variant="ghost" size="sm" className="h-8 text-gray-500" onClick={() => toast.info(`Viewing profile: ${member.name}`)}>
+                                            View Profile
+                                        </Button>
+                                    </td>
+                                </tr>
+                            ))
+                        ) : (
+                            <tr>
+                                <td colSpan={6} className="px-6 py-8 text-center text-gray-500">
+                                    No team members found.
+                                </td>
+                            </tr>
+                        )}
+                    </tbody>
+                </table>
+            </div>
         </div>
-    </div>
-);
+    );
+};
 
 const ApprovalsView = ({ commissions, onRefresh }: { commissions: Commission[], onRefresh: () => void }) => {
     const [loading, setLoading] = useState<string | null>(null);

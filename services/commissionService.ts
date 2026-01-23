@@ -131,9 +131,16 @@ export const commissionService = {
         }
     },
 
-    // Get Team Commissions (Manager View - Placeholder)
+    // Get Team Commissions (Manager View)
     getTeamCommissions: async () => {
-        return [];
+        try {
+            const response = await api.get<any>('/commissions/my-team/');
+            // Backend returns array of { consultant: User, total_sales, pending_count, ... }
+            return response.data || [];
+        } catch (error) {
+            console.error('Error fetching team commissions:', error);
+            return [];
+        }
     },
 
     // Get a single commission by ID
