@@ -160,13 +160,27 @@ export const commissionService = {
 
     // Submit a new commission
     createCommission: async (data: CreateCommissionDTO) => {
-        // Get current user ID from auth context or token
-        const userStr = localStorage.getItem('user');
-        const user = userStr ? JSON.parse(userStr) : null;
-        const consultantId = user?.id;
+        // Get user ID from JWT token
+        const token = localStorage.getItem('access_token');
 
-        if (!consultantId) {
-            throw new Error('User not authenticated');
+        if (!token) {
+            throw new Error('No authentication token found. Please login again.');
+        }
+
+        // Decode JWT to get user ID (JWT format: header.payload.signature)
+        let consultantId: number;
+        try {
+            const payload = JSON.parse(atob(token.split('.')[1]));
+            consultantId = payload.user_id || payload.sub || payload.id;
+
+            if (!consultantId) {
+                throw new Error('User ID not found in token. Please login again.');
+            }
+
+            console.log('👤 User ID from token:', consultantId);
+        } catch (decodeError) {
+            console.error('Failed to decode token:', decodeError);
+            throw new Error('Invalid authentication token. Please login again.');
         }
 
         // Calculate commission rate from SFA and Tiering
