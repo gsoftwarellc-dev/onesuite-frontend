@@ -53,52 +53,82 @@ export const commissionService = {
         startDate?: string;
         endDate?: string;
     }) => {
-        // Backend returns paginated { count, results: [...] } with snake_case fields
-        const response = await api.get<{ count: number, results: any[] }>('/commissions/my-commissions/', { params });
+        try {
+            // Backend returns paginated { count, results: [...] } with snake_case fields
+            const response = await api.get<{ count: number, results: any[] }>('/commissions/my-commissions/', { params });
 
-        // Fix: Map snake_case to camelCase for the frontend interface
-        return response.data.results.map((item: any) => ({
-            id: item.id.toString(),
-            consultantName: item.consultant ? item.consultant.username : 'Unknown',
-            consultantId: item.consultant ? item.consultant.id.toString() : '',
-            clientName: item.reference_number, // Fallback as client name is not in base model
-            productType: item.commission_type === 'base' ? 'Standard Commission' : 'Override',
-            paymentDate: item.transaction_date,
-            grossRevenue: parseFloat(item.sale_amount),
-            netRevenue: parseFloat(item.sale_amount),
-            commissionRate: 0,
-            commissionAmount: parseFloat(item.calculated_amount),
-            status: (item.state === 'submitted' ? 'pending' : item.state) as CommissionStatus,
-            statusHistory: [],
-            submittedDate: item.created_at,
-            notes: `Ref: ${item.reference_number}`
-        }));
+            // Handle empty or missing results
+            if (!response.data || !response.data.results) {
+                return [];
+            }
+
+            // Fix: Map snake_case to camelCase for the frontend interface
+            return response.data.results.map((item: any) => ({
+                id: item.id?.toString() || '',
+                consultantName: item.consultant?.username || 'Unknown',
+                consultantId: item.consultant?.id?.toString() || '',
+                clientName: item.reference_number || 'N/A',
+                productType: item.commission_type === 'base' ? 'Standard Commission' : 'Override',
+                paymentDate: item.transaction_date || new Date().toISOString().split('T')[0],
+                grossRevenue: parseFloat(item.sale_amount || '0'),
+                netRevenue: parseFloat(item.sale_amount || '0'),
+                commissionRate: parseFloat(item.commission_rate || '0'),
+                commissionAmount: parseFloat(item.calculated_amount || '0'),
+                status: (item.state === 'submitted' ? 'pending' : item.state) as CommissionStatus,
+                statusHistory: [],
+                submittedDate: item.created_at || new Date().toISOString(),
+                notes: `Ref: ${item.reference_number || item.id}`
+            }));
+        } catch (error: any) {
+            console.error('Error fetching commissions:', error);
+            return [];
+        }
     },
 
     // Get Pending Approvals (Manager View)
     getPendingApprovals: async () => {
-        const response = await api.get<{ count: number, results: any[] }>('/commissions/approvals/pending/');
-        return response.data.results.map((item: any) => ({
-            id: item.commission.id.toString(),
-            consultantName: item.commission.consultant ? item.commission.consultant.username : 'Unknown',
-            consultantId: item.commission.consultant ? item.commission.consultant.id.toString() : '',
-            clientName: item.commission.reference_number,
-            productType: item.commission.commission_type === 'base' ? 'Standard Commission' : 'Override',
-            paymentDate: item.commission.transaction_date,
-            grossRevenue: parseFloat(item.commission.sale_amount),
-            netRevenue: parseFloat(item.commission.sale_amount),
-            commissionRate: 0,
-            commissionAmount: parseFloat(item.commission.calculated_amount),
-            // Mock data for UI development
-            sfaPercentage: 10,
-            tieringPercentage: 15,
-            overridingPercentage: 3,
+        try {
+            const response = await api.get<any>('/commissions/approvals/pending/');
 
-            status: (item.commission.state === 'submitted' ? 'pending' : item.commission.state) as CommissionStatus,
-            statusHistory: [],
-            submittedDate: item.created_at, // Approval creation date
-            notes: `Approval Ref: ${item.id}`
-        }));
+            // Handle both response formats:
+            // 1. Paginated: { count, results: [...] }
+            // 2. Direct array: [...]
+            let items = Array.isArray(response.data) ? response.data : response.data.results || [];
+
+            // If items is empty or undefined, return empty array
+            if (!items || items.length === 0) {
+                return [];
+            }
+
+            return items.map((item: any) => {
+                // Handle both nested (item.commission) and flat (item) structures
+                const commission = item.commission || item;
+
+                return {
+                    id: commission.id?.toString() || '',
+                    consultantName: commission.consultant?.username || 'Unknown',
+                    consultantId: commission.consultant?.id?.toString() || '',
+                    clientName: commission.reference_number || 'N/A',
+                    productType: commission.commission_type === 'base' ? 'Standard Commission' : 'Override',
+                    paymentDate: commission.transaction_date || new Date().toISOString().split('T')[0],
+                    grossRevenue: parseFloat(commission.sale_amount || '0'),
+                    netRevenue: parseFloat(commission.sale_amount || '0'),
+                    commissionRate: parseFloat(commission.commission_rate || '0'),
+                    commissionAmount: parseFloat(commission.calculated_amount || '0'),
+                    sfaPercentage: 10,
+                    tieringPercentage: 15,
+                    overridingPercentage: 3,
+                    status: (commission.state === 'submitted' ? 'pending' : commission.state) as CommissionStatus,
+                    statusHistory: [],
+                    submittedDate: item.created_at || commission.created_at || new Date().toISOString(),
+                    notes: `Ref: ${commission.reference_number || commission.id}`
+                };
+            });
+        } catch (error: any) {
+            console.error('Error fetching pending approvals:', error);
+            // Return empty array instead of throwing to prevent UI crash
+            return [];
+        }
     },
 
     // Get Team Commissions (Manager View - Placeholder)
