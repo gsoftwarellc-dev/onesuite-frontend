@@ -153,7 +153,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             title: "Payments", // "finance → payments"
             url: "/payments",
             icon: DollarSign,
-            roles: ["finance"],
+            roles: ["finance", "director"],
         },
         {
             title: "Analytics", // "admin/director → analytics"

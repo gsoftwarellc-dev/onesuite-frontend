@@ -1,600 +1,526 @@
-"use client"
+"use client";
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { toast } from 'sonner';
-import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts';
 import {
-    Users,
     CheckCircle,
     Clock,
+    Users,
+    TrendingUp,
     Search,
-    ChevronDown,
-    BarChart3,
-    Upload,
     Filter,
-    ArrowUp,
-    ArrowDown,
+    ArrowUpRight,
+    User,
+    Upload,
+    CheckSquare,
+    FileText,
+    ChevronDown,
+    ArrowUpDown,
+    MoreHorizontal,
+    Calendar,
     XCircle,
+    Check
 } from 'lucide-react';
+import {
+    BarChart,
+    Bar,
+    XAxis,
+    YAxis,
+    CartesianGrid,
+    Tooltip,
+    ResponsiveContainer,
+    PieChart,
+    Pie,
+    Cell,
+    Legend
+} from 'recharts';
+import { toast } from 'sonner';
+import { LoadingSkeleton } from '@/components/loading-skeleton';
 import { Button } from '@/components/ui/button';
-import { analyticsService, ManagerDashboardDTO } from '@/services/analyticsService';
 import { Input } from '@/components/ui/input';
-import { commissionService, Commission, CommissionStatus } from '@/services/commissionService';
-import { userService, User as UserType } from '@/services/userService';
+import { commissionService, Commission } from '@/services/commissionService';
 import { RoleGuard } from '@/components/guards/RoleGuard';
-import { StatusActionButton } from '@/components/dashboard/status-action-button';
 
-export default function ManagerDashboard() {
+// --- Types & Mock Data ---
+
+interface TeamMember {
+    id: string;
+    name: string;
+    role: string;
+    status: 'Active' | 'Inactive';
+    totalSales: number;
+    pendingCommissions: number;
+}
+
+const mockTeamMembers: TeamMember[] = [
+    { id: '1', name: 'David Lee', role: 'Senior Consultant', status: 'Active', totalSales: 152000, pendingCommissions: 3 },
+    { id: '2', name: 'Emily Zhang', role: 'Consultant', status: 'Active', totalSales: 98000, pendingCommissions: 5 },
+    { id: '3', name: 'John Doe', role: 'Consultant', status: 'Active', totalSales: 87000, pendingCommissions: 2 },
+    { id: '4', name: 'Sarah Wilson', role: 'Junior Consultant', status: 'Active', totalSales: 45000, pendingCommissions: 1 },
+    { id: '5', name: 'Michael Brown', role: 'Consultant', status: 'Inactive', totalSales: 12000, pendingCommissions: 0 },
+];
+
+// --- Sub-Components ---
+
+const DefaultDashboardView = ({
+    commissions,
+    handleReviewCommissions,
+    handleManageTeam,
+    handleViewReports,
+    searchTerm, setSearchTerm,
+    startDate, setStartDate,
+    endDate, setEndDate,
+    statusFilter, setStatusFilter,
+    teamFilter, setTeamFilter,
+    consultantFilter, setConsultantFilter,
+    filtersRef
+}: any) => {
     const router = useRouter();
-    const searchParams = useSearchParams();
-    const initialView = searchParams.get('view') as 'dashboard' | 'review' | 'team' | 'reports';
-    const [activeView, setActiveView] = useState<'dashboard' | 'review' | 'team' | 'reports'>(initialView || 'dashboard');
-    const [selectedFilter, setSelectedFilter] = useState('all');
-    const [sortBy, setSortBy] = useState<'name-asc' | 'name-desc' | 'amount-desc'>('name-asc');
-    const [searchQuery, setSearchQuery] = useState('');
-    const [commissions, setCommissions] = useState<Commission[]>([]);
-    const [teamMembers, setTeamMembers] = useState<UserType[]>([]);
-    const [stats, setStats] = useState<any[]>([]);
-    const [loading, setLoading] = useState(true);
 
-    const statusDistribution = [
-        { name: 'Pending', value: commissions.filter(c => c.status === 'pending').length, color: '#F59E0B' },
-        { name: 'Approved', value: commissions.filter(c => c.status === 'approved').length, color: '#10B981' },
-        { name: 'Rejected', value: commissions.filter(c => c.status === 'rejected').length, color: '#EF4444' },
+    // Mock Data for Charts
+    const teamPerformanceData = [
+        { name: 'John Doe', amount: 48000 },
+        { name: 'Jane Smith', amount: 42000 },
+        { name: 'Mike Johnson', amount: 52000 },
+        { name: 'Sarah W.', amount: 39000 },
+        { name: 'Robert B.', amount: 29000 },
     ];
 
+    const pieData = [
+        { name: 'Approved', value: 75, color: '#10b981' }, // Green
+        { name: 'Pending', value: 20, color: '#f59e0b' },  // Orange
+        { name: 'Rejected', value: 5, color: '#ef4444' },  // Red
+    ];
+
+    const StatsCard = ({ title, value, sub, icon: Icon, iconColorClass }: any) => (
+        <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-100 flex flex-col justify-between h-full">
+            <div className={`w-10 h-10 rounded-lg ${iconColorClass} flex items-center justify-center mb-4 text-white`}>
+                <Icon className="w-5 h-5" />
+            </div>
+            <div>
+                <h3 className="text-2xl font-bold text-gray-900 mb-1">{value}</h3>
+                <p className="text-sm font-medium text-gray-500 mb-1">{title}</p>
+                <p className="text-xs text-gray-400">{sub}</p>
+            </div>
+        </div>
+    );
+
+    // Filter Logic for Dashboard Table
+    const filteredCommissions = commissions.filter((c: Commission) => {
+        const matchesSearch =
+            c.consultantName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            c.clientName?.toLowerCase().includes(searchTerm.toLowerCase());
+
+        const matchesStatus = statusFilter === 'All Status' ||
+            (statusFilter === 'Pending' && c.status === 'pending') ||
+            (statusFilter === 'Approved' && ['approved', 'authorized'].includes(c.status)) ||
+            (statusFilter === 'Paid' && c.status === 'paid');
+
+        const matchesTeam = teamFilter === 'All Teams';
+        const matchesConsultant = consultantFilter === 'All Consultants' || c.consultantName === consultantFilter;
+
+        let matchesDate = true;
+        if (startDate || endDate) {
+            const commDate = new Date(c.paymentDate || c.submittedDate).getTime();
+            const start = startDate ? new Date(startDate).getTime() : 0;
+            const end = endDate ? new Date(endDate).getTime() : Infinity;
+            matchesDate = commDate >= start && commDate <= end;
+        }
+
+        return matchesSearch && matchesStatus && matchesTeam && matchesConsultant && matchesDate;
+    });
+
+
+    return (
+        <div className="space-y-8 pb-10">
+            {/* 1. Metrics Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                <StatsCard title="Pending Review" value="12" sub="Requires your attention" icon={Clock} iconColorClass="bg-yellow-500" />
+                <StatsCard title="Approved This Month" value="S$45,200" sub="+8% from last month" icon={CheckCircle} iconColorClass="bg-green-500" />
+                <StatsCard title="Active Team Members" value="18" sub="3 high performers" icon={Users} iconColorClass="bg-blue-500" />
+                <StatsCard title="Team Performance" value="94%" sub="Above target" icon={TrendingUp} iconColorClass="bg-purple-500" />
+            </div>
+
+            {/* 2. Quick Actions */}
+            <div className="space-y-2">
+                <h2 className="text-lg font-semibold text-gray-900 mb-4">Quick Actions</h2>
+                <div className="flex flex-col md:flex-row gap-4">
+                    <Button className="bg-[#F4323D] hover:bg-[#d62d37] text-white flex-1 h-12 shadow-sm" onClick={() => router.push('/submit-commission')}>
+                        <Upload className="w-4 h-4 mr-2" /> Submit Commission
+                    </Button>
+                    <Button variant="outline" className="flex-1 h-12 bg-white border-gray-200 text-gray-700 shadow-sm hover:bg-gray-50 hover:text-gray-900" onClick={handleReviewCommissions}>
+                        <CheckSquare className="w-4 h-4 mr-2" /> Review Commissions
+                    </Button>
+                    <Button variant="outline" className="flex-1 h-12 bg-white border-gray-200 text-gray-700 shadow-sm hover:bg-gray-50 hover:text-gray-900" onClick={handleManageTeam}>
+                        <Users className="w-4 h-4 mr-2" /> Manage Team
+                    </Button>
+                    <Button variant="outline" className="flex-1 h-12 bg-white border-gray-200 text-gray-700 shadow-sm hover:bg-gray-50 hover:text-gray-900" onClick={handleViewReports}>
+                        <FileText className="w-4 h-4 mr-2" /> View Reports
+                    </Button>
+                </div>
+            </div>
+
+            {/* 3. Charts Section */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-100">
+                    <h3 className="font-bold text-gray-900 mb-6">Team Performance</h3>
+                    <div className="h-[250px] w-full">
+                        <ResponsiveContainer width="100%" height="100%">
+                            <BarChart data={teamPerformanceData}>
+                                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
+                                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#9ca3af' }} interval={0} />
+                                <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#9ca3af' }} tickFormatter={(val) => `$${val / 1000}k`} />
+                                <Tooltip cursor={{ fill: '#f9fafb' }} contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }} />
+                                <Bar dataKey="amount" fill="#F4323D" radius={[4, 4, 0, 0]} barSize={40} />
+                            </BarChart>
+                        </ResponsiveContainer>
+                    </div>
+                </div>
+                <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-100 flex flex-col">
+                    <h3 className="font-bold text-gray-900 mb-6">Commission Status Distribution</h3>
+                    <div className="flex-1 flex items-center justify-center relative min-h-[250px]">
+                        <ResponsiveContainer width="100%" height="100%">
+                            <PieChart>
+                                <Pie data={pieData} cx="50%" cy="50%" innerRadius={0} outerRadius={100} paddingAngle={0} dataKey="value">
+                                    {pieData.map((entry, index) => <Cell key={`cell-${index}`} fill={entry.color} stroke="white" strokeWidth={2} />)}
+                                </Pie>
+                                <Legend layout="vertical" verticalAlign="middle" align="right" iconType="circle" formatter={(value, entry: any) => <span className="text-gray-600 font-medium ml-2">{value} {entry.payload.value}%</span>} />
+                            </PieChart>
+                        </ResponsiveContainer>
+                    </div>
+                </div>
+            </div>
+
+            {/* 4. Commission Overview Table Section */}
+            <div ref={filtersRef} className="bg-white rounded-lg shadow-sm border border-gray-100">
+                <div className="p-6 border-b border-gray-100 flex justify-between items-center">
+                    <h3 className="text-lg font-bold text-gray-900">Commission Overview</h3>
+                    <span className="text-sm text-gray-500">Showing {filteredCommissions.length} of {commissions.length} commissions</span>
+                </div>
+
+                <div className="p-6 flex flex-col xl:flex-row gap-4 flex-wrap">
+                    {/* Search & Filters (Same as before) -- Duplicated for brevity, could be extracted */}
+                    <div className="relative flex-1 min-w-[200px]">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                        <Input placeholder="Search..." className="pl-9" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
+                    </div>
+                    <div className="flex gap-4 overflow-x-auto pb-2 xl:pb-0 items-center">
+                        <div className="flex items-center gap-2">
+                            <span className="text-xs text-gray-500 font-medium whitespace-nowrap hidden md:block">Date:</span>
+                            <input type="date" className="h-10 px-3 rounded-md border border-gray-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-[#F4323D] text-gray-600" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
+                            <span className="text-gray-400">-</span>
+                            <input type="date" className="h-10 px-3 rounded-md border border-gray-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-[#F4323D] text-gray-600" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
+                        </div>
+                        <div className="relative min-w-[140px]">
+                            <select className="w-full h-10 pl-9 pr-8 rounded-md border border-gray-200 bg-white text-sm focus:ring-2 focus:ring-[#F4323D] appearance-none cursor-pointer" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
+                                <option>All Status</option><option>Pending</option><option>Approved</option><option>Paid</option>
+                            </select>
+                            <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+                            <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+                        </div>
+                        {/* ... Other filters ... */}
+                        <div className="relative min-w-[160px]">
+                            <select className="w-full h-10 pl-9 pr-8 rounded-md border border-gray-200 bg-white text-sm focus:ring-2 focus:ring-[#F4323D] appearance-none cursor-pointer" value={consultantFilter} onChange={(e) => setConsultantFilter(e.target.value)}>
+                                <option>All Consultants</option><option>David Lee</option><option>Emily Zhang</option>
+                            </select>
+                            <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+                            <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+                        </div>
+                    </div>
+                </div>
+
+                <div className="overflow-x-auto">
+                    <table className="w-full text-sm text-left">
+                        <thead className="bg-gray-50/50 text-xs font-bold text-gray-500 uppercase border-b border-gray-100">
+                            <tr>
+                                <th className="px-6 py-4">Date</th><th className="px-6 py-4">Consultant Name</th><th className="px-6 py-4">Product Type</th><th className="px-6 py-4">Gross Revenue</th><th className="px-6 py-4">SFA %</th><th className="px-6 py-4">Tiering %</th><th className="px-6 py-4">Overriding %</th><th className="px-6 py-4">Commission</th><th className="px-6 py-4">Status</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-50">
+                            {filteredCommissions.map((commission: any) => (
+                                <tr key={commission.id} className="hover:bg-gray-50/50 transition-colors bg-white">
+                                    <td className="px-6 py-4 font-medium text-gray-900">{commission.paymentDate || new Date(commission.submittedDate).toLocaleDateString()}</td>
+                                    <td className="px-6 py-4">
+                                        <div className="flex items-center gap-2">
+                                            <div><div className="font-bold text-gray-900">{commission.consultantName}</div><div className="text-xs text-gray-500">COM-{commission.id}</div></div>
+                                            {commission.productType === 'Override' && <span className="bg-purple-100 text-purple-700 text-[10px] font-bold px-1.5 py-0.5 rounded">Override</span>}
+                                        </div>
+                                    </td>
+                                    <td className="px-6 py-4 text-gray-600">{commission.productType}</td>
+                                    <td className="px-6 py-4 text-gray-900">S$ {commission.grossRevenue.toLocaleString()}</td>
+                                    <td className="px-6 py-4 text-gray-600">{commission.sfaPercentage || 10}%</td>
+                                    <td className="px-6 py-4 text-gray-600">{commission.tieringPercentage || 15}%</td>
+                                    <td className="px-6 py-4 text-purple-600 font-medium">{commission.overridingPercentage || 3}%</td>
+                                    <td className="px-6 py-4 font-bold text-gray-900">S$ {commission.commissionAmount.toLocaleString()}</td>
+                                    <td className="px-6 py-4">
+                                        <span className={`px-2.5 py-1 rounded-full text-xs font-bold border ${['paid'].includes(commission.status) ? 'bg-blue-50 text-blue-700 border-blue-100' : ['approved', 'authorized'].includes(commission.status) ? 'bg-green-50 text-green-700 border-green-100' : 'bg-yellow-50 text-yellow-700 border-yellow-100'}`}>
+                                            {commission.status.charAt(0).toUpperCase() + commission.status.slice(1)}
+                                        </span>
+                                    </td>
+                                </tr>
+                            ))}
+                            {filteredCommissions.length === 0 && <tr><td colSpan={9} className="px-6 py-8 text-center text-gray-500">No commissions found.</td></tr>}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+const TeamView = () => (
+    <div className="space-y-6">
+        <h2 className="text-2xl font-bold text-gray-900">Team Management</h2>
+        <div className="bg-white rounded-lg shadow-sm border border-gray-100 overflow-hidden">
+            <table className="w-full text-sm text-left">
+                <thead className="bg-gray-50/50 text-xs font-bold text-gray-500 uppercase border-b border-gray-100">
+                    <tr>
+                        <th className="px-6 py-4">Name</th>
+                        <th className="px-6 py-4">Role</th>
+                        <th className="px-6 py-4">Status</th>
+                        <th className="px-6 py-4">Total Sales (YTD)</th>
+                        <th className="px-6 py-4">Pending Commissions</th>
+                        <th className="px-6 py-4 text-right">Actions</th>
+                    </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-50">
+                    {mockTeamMembers.map((member) => (
+                        <tr key={member.id} className="hover:bg-gray-50/50 transition-colors">
+                            <td className="px-6 py-4 font-medium text-gray-900">{member.name}</td>
+                            <td className="px-6 py-4 text-gray-600">{member.role}</td>
+                            <td className="px-6 py-4">
+                                <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${member.status === 'Active' ? 'bg-green-50 text-green-700 border border-green-100' : 'bg-gray-100 text-gray-600 border border-gray-200'}`}>
+                                    {member.status}
+                                </span>
+                            </td>
+                            <td className="px-6 py-4 text-gray-900 font-medium">S$ {member.totalSales.toLocaleString()}</td>
+                            <td className="px-6 py-4 text-gray-600">{member.pendingCommissions}</td>
+                            <td className="px-6 py-4 text-right">
+                                <Button variant="ghost" size="sm" className="h-8 text-gray-500" onClick={() => toast.info(`Viewing profile: ${member.name}`)}>
+                                    View Profile
+                                </Button>
+                            </td>
+                        </tr>
+                    ))}
+                </tbody>
+            </table>
+        </div>
+    </div>
+);
+
+const ApprovalsView = ({ commissions, onRefresh }: { commissions: Commission[], onRefresh: () => void }) => {
+    const [loading, setLoading] = useState<string | null>(null);
+    // Check Status Logic: Pending commissions
+    const pendingCommissions = commissions.filter(c => c.status === 'pending');
+
+    const handleApprove = async (id: string) => {
+        setLoading(id);
+        try {
+            await commissionService.approveCommission(id);
+            toast.success(`Commission COM-${id} Approved`, {
+                description: 'Notification sent to consultant.'
+            });
+            // Refresh the list
+            onRefresh();
+        } catch (error: any) {
+            console.error('Failed to approve commission:', error);
+            toast.error('Failed to approve commission', {
+                description: error.response?.data?.message || 'Please try again'
+            });
+        } finally {
+            setLoading(null);
+        }
+    };
+
+    const handleReject = async (id: string) => {
+        // For now, use a simple reason. Later can add modal for custom reason
+        const reason = prompt('Enter rejection reason:');
+        if (!reason) {
+            toast.info('Rejection cancelled');
+            return;
+        }
+
+        setLoading(id);
+        try {
+            await commissionService.rejectCommission(id, reason);
+            toast.error(`Commission COM-${id} Rejected`, {
+                description: `Reason: ${reason}`
+            });
+            // Refresh the list
+            onRefresh();
+        } catch (error: any) {
+            console.error('Failed to reject commission:', error);
+            toast.error('Failed to reject commission', {
+                description: error.response?.data?.message || 'Please try again'
+            });
+        } finally {
+            setLoading(null);
+        }
+    };
+
+    return (
+        <div className="space-y-6">
+            <div className="flex justify-between items-center">
+                <h2 className="text-2xl font-bold text-gray-900">Pending Approvals</h2>
+                <span className="bg-yellow-100 text-yellow-800 text-sm font-bold px-3 py-1 rounded-full">
+                    {pendingCommissions.length} Pending
+                </span>
+            </div>
+
+            <div className="bg-white rounded-lg shadow-sm border border-gray-100 overflow-hidden">
+                <table className="w-full text-sm text-left">
+                    <thead className="bg-gray-50/50 text-xs font-bold text-gray-500 uppercase border-b border-gray-100">
+                        <tr>
+                            <th className="px-6 py-4">Date</th>
+                            <th className="px-6 py-4">Consultant</th>
+                            <th className="px-6 py-4">Amount</th>
+                            <th className="px-6 py-4">Product</th>
+                            <th className="px-6 py-4">Status</th>
+                            <th className="px-6 py-4 text-center">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-50">
+                        {pendingCommissions.length > 0 ? (
+                            pendingCommissions.map((commission) => (
+                                <tr key={commission.id} className="hover:bg-gray-50/50 transition-colors">
+                                    <td className="px-6 py-4 text-gray-900">{new Date(commission.submittedDate).toLocaleDateString()}</td>
+                                    <td className="px-6 py-4 font-bold text-gray-900">{commission.consultantName}</td>
+                                    <td className="px-6 py-4 font-medium text-gray-900">S$ {commission.commissionAmount.toLocaleString()}</td>
+                                    <td className="px-6 py-4 text-gray-600">{commission.productType}</td>
+                                    <td className="px-6 py-4">
+                                        <span className="bg-yellow-50 text-yellow-700 border border-yellow-100 px-2.5 py-1 rounded-full text-xs font-bold">
+                                            Pending
+                                        </span>
+                                    </td>
+                                    <td className="px-6 py-4 flex justify-center gap-2">
+                                        <Button
+                                            size="sm"
+                                            className="bg-green-600 hover:bg-green-700 text-white h-8 w-8 p-0 rounded-full shadow-sm"
+                                            onClick={() => handleApprove(commission.id)}
+                                            title="Approve"
+                                        >
+                                            <Check className="w-4 h-4" />
+                                        </Button>
+                                        <Button
+                                            size="sm"
+                                            variant="destructive"
+                                            className="h-8 w-8 p-0 rounded-full shadow-sm"
+                                            onClick={() => handleReject(commission.id)}
+                                            title="Reject"
+                                        >
+                                            <XCircle className="w-4 h-4" />
+                                        </Button>
+                                    </td>
+                                </tr>
+                            ))
+                        ) : (
+                            <tr>
+                                <td colSpan={6} className="px-6 py-12 text-center text-gray-500">
+                                    <CheckCircle className="w-12 h-12 mx-auto text-green-100 mb-3" />
+                                    <p className="text-lg font-medium text-gray-900">All caught up!</p>
+                                    <p className="text-sm">No pending commissions to review.</p>
+                                </td>
+                            </tr>
+                        )}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    );
+};
+
+// --- Main Container ---
+
+function ManagerDashboardContent() {
+    const router = useRouter();
+    const searchParams = useSearchParams();
+    const viewParam = searchParams.get('view');
+    const filtersRef = useRef<HTMLDivElement>(null);
+
+    const [commissions, setCommissions] = useState<Commission[]>([]);
+    const [loading, setLoading] = useState(true);
+
+    // Default filters state (can be lifted more if needed)
+    const [searchTerm, setSearchTerm] = useState('');
+    const [statusFilter, setStatusFilter] = useState('All Status');
+    const [teamFilter, setTeamFilter] = useState('All Teams');
+    const [consultantFilter, setConsultantFilter] = useState('All Consultants');
+    const [startDate, setStartDate] = useState('');
+    const [endDate, setEndDate] = useState('');
+
     useEffect(() => {
-        const fetchDashboardData = async () => {
-            try {
-                setLoading(true);
-
-                // 1. Analytics for KPIs (Source of Truth)
-                const analytics = await analyticsService.getManagerDashboard();
-
-                // 2. Operational Data for Table
-                const fetchedCommissions = await commissionService.getCommissions();
-                setCommissions(fetchedCommissions);
-
-                // 3. Team Data
-                const members = await userService.getTeamMembers();
-                setTeamMembers(members);
-
-                // Map Analytics to Stats - WITH SAFETY CHECKS
-                if (analytics && analytics.summary) {
-                    setStats([
-                        {
-                            icon: Clock,
-                            label: 'Pending Review',
-                            value: (analytics.summary.pending_approvals || 0).toString(),
-                            subtext: 'Requires your attention',
-                            color: 'bg-yellow-500',
-                        },
-                        {
-                            icon: CheckCircle,
-                            label: 'Team Total (YTD)',
-                            value: `S$${parseFloat(analytics.summary.team_total_ytd || '0').toLocaleString()}`,
-                            subtext: `From ${analytics.summary.team_size || 0} members`,
-                            color: 'bg-green-500',
-                        },
-                        {
-                            icon: Users,
-                            label: 'Team Size',
-                            value: (analytics.summary.team_size || 0).toString(),
-                            subtext: 'Active Consultants',
-                            color: 'bg-blue-500',
-                        }
-                    ]);
-                } else {
-                    // Fallback to avoid crash, but log error
-                    console.error("Analytics data missing summary structure");
-                    setStats([]);
-                }
-
-            } catch (error) {
-                console.error("Failed to fetch dashboard data:", error);
-                // Only show toast if it's a real network/server error, not just empty data
-                // toast.error("Failed to load dashboard data."); 
-            } finally {
-                setLoading(false);
-            }
-        };
-
-        fetchDashboardData();
+        loadCommissions();
     }, []);
 
-    // Sync state if URL changes
-    useEffect(() => {
-        const view = searchParams.get('view') as 'dashboard' | 'review' | 'team' | 'reports';
-        if (view) setActiveView(view);
-    }, [searchParams]);
-
-    // Filter and sort commissions
-    const getFilteredCommissions = () => {
-        const filtered = commissions.filter(commission => {
-            const matchesStatus = selectedFilter === 'all' || commission.status === selectedFilter;
-            const matchesConsultant = true;
-            const matchesSearch =
-                commission.consultantName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                commission.productType.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                commission.id.toLowerCase().includes(searchQuery.toLowerCase());
-
-            return matchesStatus && matchesSearch && matchesConsultant;
-        });
-
-        // Sort
-        if (sortBy === 'name-asc') {
-            filtered.sort((a, b) => a.consultantName.localeCompare(b.consultantName));
-        } else if (sortBy === 'name-desc') {
-            filtered.sort((a, b) => b.consultantName.localeCompare(a.consultantName));
-        } else if (sortBy === 'amount-desc') {
-            filtered.sort((a, b) => b.commissionAmount - a.commissionAmount);
-        }
-
-        return filtered;
-    };
-
-    const handleStatusUpdate = async (id: string, newStatus: CommissionStatus) => {
+    // Helper function to load/refresh commissions
+    const loadCommissions = async () => {
         try {
-            await commissionService.updateStatus(id, newStatus);
-            toast.success(`Commission ${newStatus} successfully`);
-
-            // Refresh local state
-            setCommissions(prev => prev.map(c =>
-                c.id === id ? { ...c, status: newStatus } : c
-            ));
+            const data = await commissionService.getPendingApprovals();
+            setCommissions(data);
         } catch (error) {
-            console.error("Failed to update status:", error);
-            toast.error(`Failed to update status to ${newStatus}`);
+            console.error('Failed to load manager dashboard:', error);
+            toast.error('Failed to load dashboard data');
+        } finally {
+            setLoading(false);
         }
     };
 
-    const filteredCommissions = getFilteredCommissions();
+    // Helper functions for Dashboard Quick Actions
+    const handleReviewCommissions = () => {
+        // Option 1: Scroll to table in dashboard view
+        // setStatusFilter('Pending');
+        // filtersRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 
-    const getStatusBadge = (status: CommissionStatus) => {
-        const baseClasses = 'px-3 py-1 rounded-full text-xs inline-flex items-center gap-1';
-        switch (status) {
-            case 'pending':
-                return (
-                    <span className={`${baseClasses} bg-yellow-100 text-yellow-800`}>
-                        <Clock className="w-3 h-3" />
-                        Pending
-                    </span>
-                );
-            case 'approved':
-            case 'authorized':
-                return (
-                    <span className={`${baseClasses} bg-green-100 text-green-800`}>
-                        <CheckCircle className="w-3 h-3" />
-                        Approved
-                    </span>
-                );
-            case 'paid':
-                return (
-                    <span className={`${baseClasses} bg-blue-100 text-blue-800`}>
-                        <CheckCircle className="w-3 h-3" />
-                        Paid
-                    </span>
-                );
-            case 'rejected':
-                return (
-                    <span className={`${baseClasses} bg-red-100 text-red-800`}>
-                        <XCircle className="w-3 h-3" />
-                        Rejected
-                    </span>
-                );
-            default:
-                return null;
-        }
+        // Option 2: Navigate to dedicated view (Chosen)
+        router.push('/manager?view=review');
     };
 
-    const toggleSort = () => {
-        setSortBy(current => current === 'name-asc' ? 'name-desc' : 'name-asc');
+    const handleManageTeam = () => {
+        router.push('/manager?view=team');
     };
 
-    const renderMainContent = () => {
-        switch (activeView) {
-            case 'dashboard':
-                return (
-                    <div className="space-y-6">
-                        {/* Summary Cards */}
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                            {stats.map((stat, i) => (
-                                <div key={i} className="bg-white rounded-lg shadow p-6">
-                                    <div className="flex items-start justify-between mb-4">
-                                        <div className={`w-12 h-12 ${stat.color} rounded-lg flex items-center justify-center`}>
-                                            <stat.icon className="w-6 h-6 text-white" />
-                                        </div>
-                                    </div>
-                                    <div className="text-2xl mb-1">{stat.value}</div>
-                                    <div className="text-sm text-gray-600 mb-2">{stat.label}</div>
-                                    <div className="text-xs text-gray-500">{stat.subtext}</div>
-                                </div>
-                            ))}
-                        </div>
-
-                        {/* Quick Actions */}
-                        <div className="bg-white rounded-lg shadow p-6">
-                            <h2 className="text-xl mb-4">Quick Actions</h2>
-                            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                                <button
-                                    onClick={() => router.push('/submit-commission')}
-                                    className="bg-[#F4323D] text-white px-6 py-4 rounded-lg hover:bg-[#d62d37] transition-colors flex items-center justify-center gap-2"
-                                >
-                                    <Upload className="w-5 h-5" />
-                                    <span>Submit Commission</span>
-                                </button>
-                                <button
-                                    onClick={() => setActiveView('review')}
-                                    className="bg-white border-2 border-gray-300 text-gray-700 px-6 py-4 rounded-lg hover:bg-gray-50 transition-colors flex items-center justify-center gap-2"
-                                >
-                                    <CheckCircle className="w-5 h-5" />
-                                    <span>Review Commissions</span>
-                                </button>
-                                <button
-                                    onClick={() => setActiveView('team')}
-                                    className="bg-white border-2 border-gray-300 text-gray-700 px-6 py-4 rounded-lg hover:bg-gray-50 transition-colors flex items-center justify-center gap-2"
-                                >
-                                    <Users className="w-5 h-5" />
-                                    <span>Manage Team</span>
-                                </button>
-                                <button
-                                    onClick={() => setActiveView('reports')}
-                                    className="bg-white border-2 border-gray-300 text-gray-700 px-6 py-4 rounded-lg hover:bg-gray-50 transition-colors flex items-center justify-center gap-2"
-                                >
-                                    <BarChart3 className="w-5 h-5" />
-                                    <span>View Reports</span>
-                                </button>
-                            </div>
-                        </div>
-
-                        {/* Charts Row */}
-                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                            {/* Team Performance Chart */}
-                            <div className="bg-white rounded-lg shadow p-6">
-                                <h2 className="text-xl mb-6">Top Performing Members</h2>
-                                <div className="h-[300px] w-full">
-                                    {/* Using Performer data from analytics if available, else showing simple list */}
-                                    <div className="space-y-4 overflow-y-auto h-full pr-2">
-                                        {/* Ideally we use Recharts BarChart here, but simplistic list is safer for Hotfix if data shape varies */}
-                                        {/* Let's try to fetch performers from analytics state if we saved it */}
-                                        {/* Since we didn't save full analytics object in state, let's fix that first in the useEffect or just use a placeholder text if no data */}
-                                        <div className="flex flex-col gap-2">
-                                            {teamMembers.slice(0, 5).map((member, idx) => (
-                                                <div key={member.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                                                    <div className="flex items-center gap-3">
-                                                        <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center font-bold text-xs">
-                                                            {idx + 1}
-                                                        </div>
-                                                        <div>
-                                                            <p className="text-sm font-medium">{member.name}</p>
-                                                            <p className="text-xs text-gray-500">{member.role}</p>
-                                                        </div>
-                                                    </div>
-                                                    {/* We don't have revenue data in member object, so we omit amount rather than fake it */}
-                                                </div>
-                                            ))}
-                                            {teamMembers.length === 0 && <p className="text-gray-500 text-center py-10">No team members found.</p>}
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-
-                            {/* Status Distribution */}
-                            <div className="bg-white rounded-lg shadow p-6">
-                                <h2 className="text-xl mb-6">Commission Status Distribution</h2>
-                                <div className="flex items-center justify-center h-[300px]">
-                                    {commissions.length > 0 ? (
-                                        <ResponsiveContainer width="100%" height="100%">
-                                            <PieChart>
-                                                <Pie
-                                                    data={statusDistribution}
-                                                    cx="50%"
-                                                    cy="50%"
-                                                    labelLine={false}
-                                                    label={({ name, percent }: any) => percent > 0 ? `${name} ${(percent * 100).toFixed(0)}%` : ''}
-                                                    outerRadius={100}
-                                                    fill="#8884d8"
-                                                    dataKey="value"
-                                                >
-                                                    {statusDistribution.map((entry, index) => (
-                                                        <Cell key={`cell-${index}`} fill={entry.color} />
-                                                    ))}
-                                                </Pie>
-                                                <Tooltip />
-                                            </PieChart>
-                                        </ResponsiveContainer>
-                                    ) : (
-                                        <div className="text-gray-500">No commission data available</div>
-                                    )}
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Commission Table */}
-                        <div className="bg-white rounded-lg shadow">
-                            <div className="p-6 border-b border-gray-200">
-                                <div className="flex items-center justify-between mb-4">
-                                    <h2 className="text-xl">Commission Overview</h2>
-                                    <div className="text-sm text-gray-600">
-                                        Showing {filteredCommissions.length} of {commissions.length} commissions
-                                    </div>
-                                </div>
-
-                                {/* Filters */}
-                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
-                                    <div className="relative">
-                                        <Search className="w-5 h-5 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                                        <Input
-                                            type="text"
-                                            placeholder="Search..."
-                                            value={searchQuery}
-                                            onChange={(e) => setSearchQuery(e.target.value)}
-                                            className="pl-10"
-                                        />
-                                    </div>
-
-                                    <div className="relative">
-                                        <Filter className="w-5 h-5 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                                        <select
-                                            value={selectedFilter}
-                                            onChange={(e) => setSelectedFilter(e.target.value)}
-                                            className="w-full pl-10 pr-10 py-2 border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-ring bg-background appearance-none"
-                                        >
-                                            <option value="all">All Status</option>
-                                            <option value="pending">Pending</option>
-                                            <option value="approved">Approved</option>
-                                            <option value="paid">Paid</option>
-                                            <option value="rejected">Rejected</option>
-                                        </select>
-                                        <ChevronDown className="w-5 h-5 text-gray-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
-                                    </div>
-                                    <button
-                                        onClick={toggleSort}
-                                        className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors flex items-center justify-center gap-2 text-sm"
-                                    >
-                                        {sortBy === 'name-asc' ? (
-                                            <>
-                                                <ArrowUp className="w-4 h-4" />
-                                                <span>A–Z</span>
-                                            </>
-                                        ) : (
-                                            <>
-                                                <ArrowDown className="w-4 h-4" />
-                                                <span>Z–A</span>
-                                            </>
-                                        )}
-                                    </button>
-                                </div>
-                            </div>
-
-                            {/* Table */}
-                            <div className="overflow-x-auto">
-                                <table className="w-full">
-                                    <thead className="bg-[#F4F4F4]">
-                                        <tr>
-                                            <th className="px-6 py-3 text-left text-xs text-gray-600 uppercase tracking-wider">Date</th>
-                                            <th className="px-6 py-3 text-left text-xs text-gray-600 uppercase tracking-wider">Consultant Name</th>
-                                            <th className="px-6 py-3 text-left text-xs text-gray-600 uppercase tracking-wider">Product Type</th>
-                                            <th className="px-6 py-3 text-left text-xs text-gray-600 uppercase tracking-wider">Gross Revenue</th>
-                                            <th className="px-6 py-3 text-left text-xs text-gray-600 uppercase tracking-wider">Commission</th>
-                                            <th className="px-6 py-3 text-left text-xs text-gray-600 uppercase tracking-wider">Status</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody className="bg-white divide-y divide-gray-200">
-                                        {filteredCommissions.length === 0 ? (
-                                            <tr>
-                                                <td colSpan={6} className="px-6 py-4 text-center text-gray-500">
-                                                    No commissions found.
-                                                </td>
-                                            </tr>
-                                        ) : (
-                                            filteredCommissions.slice(0, 10).map((commission) => (
-                                                <tr key={commission.id} className="hover:bg-gray-50">
-                                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                                        {commission.paymentDate}
-                                                    </td>
-                                                    <td className="px-6 py-4 whitespace-nowrap">
-                                                        <div className="flex items-center gap-2">
-                                                            <div>
-                                                                <div className="text-sm text-gray-900">{commission.consultantName}</div>
-                                                                <div className="text-xs text-gray-500">{commission.consultantId}</div>
-                                                            </div>
-                                                        </div>
-                                                    </td>
-                                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
-                                                        {commission.productType}
-                                                    </td>
-                                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                                        S$ {commission.grossRevenue.toLocaleString()}
-                                                    </td>
-                                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                                        S$ {commission.commissionAmount.toLocaleString()}
-                                                    </td>
-                                                    <td className="px-6 py-4 whitespace-nowrap">
-                                                        {getStatusBadge(commission.status)}
-                                                    </td>
-                                                </tr>
-                                            ))
-                                        )}
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
-                    </div>
-                );
-
-            case 'team':
-                return (
-                    <div className="bg-white rounded-lg shadow p-6">
-                        <h2 className="text-2xl mb-6">Team Management</h2>
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                            {teamMembers.map((member) => (
-                                <div key={member.id} className="border border-gray-200 rounded-lg p-4 hover:border-[#F4323D] transition-colors">
-                                    <div className="flex items-center gap-4 mb-4">
-                                        <div className="w-12 h-12 bg-[#F4323D] rounded-full flex items-center justify-center text-white">
-                                            {member.name.split(' ').map(n => n[0]).join('')}
-                                        </div>
-                                        <div className="flex-1">
-                                            <h3 className="mb-1">{member.name}</h3>
-                                            <p className="text-sm text-gray-600">{member.role}</p>
-                                        </div>
-                                    </div>
-                                    <div className="space-y-2 text-sm">
-                                        <div className="flex justify-between">
-                                            <span className="text-gray-600">Email:</span>
-                                            <span className="font-medium">{member.email}</span>
-                                        </div>
-                                        {member.contactNumber && (
-                                            <div className="flex justify-between">
-                                                <span className="text-gray-600">Contact:</span>
-                                                <span className="font-medium">{member.contactNumber}</span>
-                                            </div>
-                                        )}
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                        <div className="mt-4">
-                            <Button variant="outline" onClick={() => setActiveView('dashboard')}>Back to Dashboard</Button>
-                        </div>
-                    </div>
-                );
-
-            case 'review':
-                const pendingCommissions = commissions.filter(c => c.status === 'pending');
-
-                return (
-                    <div className="bg-white rounded-lg shadow p-6">
-                        <div className="flex items-center justify-between mb-6">
-                            <h2 className="text-xl font-semibold">Review Pending Commissions</h2>
-                            <Button variant="outline" onClick={() => setActiveView('dashboard')}>Back to Dashboard</Button>
-                        </div>
-
-                        {pendingCommissions.length === 0 ? (
-                            <div className="text-center py-12 text-gray-500">
-                                <CheckCircle className="w-12 h-12 mx-auto mb-3 text-green-500 opacity-50" />
-                                <p>All caught up! No pending commissions to review.</p>
-                            </div>
-                        ) : (
-                            <div className="overflow-x-auto">
-                                <table className="w-full">
-                                    <thead className="bg-[#F4F4F4]">
-                                        <tr>
-                                            <th className="px-6 py-3 text-left text-xs text-gray-600 uppercase tracking-wider">Date</th>
-                                            <th className="px-6 py-3 text-left text-xs text-gray-600 uppercase tracking-wider">Consultant</th>
-                                            <th className="px-6 py-3 text-left text-xs text-gray-600 uppercase tracking-wider">Client / Product</th>
-                                            <th className="px-6 py-3 text-left text-xs text-gray-600 uppercase tracking-wider">Amount</th>
-                                            <th className="px-6 py-3 text-left text-xs text-gray-600 uppercase tracking-wider">Actions</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody className="bg-white divide-y divide-gray-200">
-                                        {pendingCommissions.map((commission) => (
-                                            <tr key={commission.id} className="hover:bg-gray-50">
-                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                                    {commission.paymentDate}
-                                                </td>
-                                                <td className="px-6 py-4 whitespace-nowrap">
-                                                    <div className="text-sm font-medium text-gray-900">{commission.consultantName}</div>
-                                                    <div className="text-xs text-gray-500">{commission.consultantId}</div>
-                                                </td>
-                                                <td className="px-6 py-4 whitespace-nowrap">
-                                                    <div className="text-sm text-gray-900">{commission.clientName}</div>
-                                                    <div className="text-xs text-gray-500">{commission.productType}</div>
-                                                </td>
-                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                                    S$ {commission.commissionAmount.toLocaleString()}
-                                                </td>
-                                                <td className="px-6 py-4 whitespace-nowrap">
-                                                    <StatusActionButton
-                                                        currentStatus={commission.status}
-                                                        userRole="manager"
-                                                        onAuthorize={() => handleStatusUpdate(commission.id, 'authorized')}
-                                                        onReject={() => handleStatusUpdate(commission.id, 'rejected')}
-                                                    />
-                                                </td>
-                                            </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
-                            </div>
-                        )}
-                    </div>
-                );
-
-            case 'reports':
-                // For reports, we show a summary of "Approved" and "Paid" commissions (Historical data)
-                const historicalCommissions = commissions.filter(c => ['approved', 'paid'].includes(c.status));
-
-                return (
-                    <div className="bg-white rounded-lg shadow p-6">
-                        <div className="flex items-center justify-between mb-6">
-                            <h2 className="text-xl font-semibold">Approved Commission Reports</h2>
-                            <Button variant="outline" onClick={() => setActiveView('dashboard')}>Back to Dashboard</Button>
-                        </div>
-
-                        {historicalCommissions.length === 0 ? (
-                            <div className="text-center py-12 text-gray-500">
-                                <BarChart3 className="w-12 h-12 mx-auto mb-3 text-blue-500 opacity-50" />
-                                <p>No historical approved commissions found.</p>
-                            </div>
-                        ) : (
-                            <div className="overflow-x-auto">
-                                <table className="w-full">
-                                    <thead className="bg-[#F4F4F4]">
-                                        <tr>
-                                            <th className="px-6 py-3 text-left text-xs text-gray-600 uppercase tracking-wider">Date</th>
-                                            <th className="px-6 py-3 text-left text-xs text-gray-600 uppercase tracking-wider">Consultant</th>
-                                            <th className="px-6 py-3 text-left text-xs text-gray-600 uppercase tracking-wider">Product</th>
-                                            <th className="px-6 py-3 text-left text-xs text-gray-600 uppercase tracking-wider">Amount</th>
-                                            <th className="px-6 py-3 text-left text-xs text-gray-600 uppercase tracking-wider">Status</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody className="bg-white divide-y divide-gray-200">
-                                        {historicalCommissions.map((commission) => (
-                                            <tr key={commission.id} className="hover:bg-gray-50">
-                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                                    {commission.paymentDate}
-                                                </td>
-                                                <td className="px-6 py-4 whitespace-nowrap">
-                                                    <div className="text-sm font-medium text-gray-900">{commission.consultantName}</div>
-                                                </td>
-                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
-                                                    {commission.productType}
-                                                </td>
-                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                                    S$ {commission.commissionAmount.toLocaleString()}
-                                                </td>
-                                                <td className="px-6 py-4 whitespace-nowrap">
-                                                    {getStatusBadge(commission.status)}
-                                                </td>
-                                            </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
-                            </div>
-                        )}
-                    </div>
-                );
-            default:
-                return <div>View not found</div>;
-        }
+    const handleViewReports = () => {
+        setStartDate(new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0]);
+        setEndDate(new Date().toISOString().split('T')[0]);
+        filtersRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        toast.success("Date range set to this month");
     };
 
-    if (loading) {
-        return (
-            <div className="w-full h-96 flex items-center justify-center">
-                <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-gray-900"></div>
-            </div>
-        );
+
+    if (loading) return <div className="p-6"><LoadingSkeleton /></div>;
+
+    // Render Logic based on 'view' param
+    if (viewParam === 'team') {
+        return <TeamView />;
+    }
+
+    if (viewParam === 'review') {
+        return <ApprovalsView commissions={commissions} onRefresh={loadCommissions} />;
     }
 
     return (
-        <RoleGuard allowedRoles={['manager', 'admin', 'finance', 'director']}>
-            <div className="w-full">
-                <h1 className="text-2xl font-bold tracking-tight mb-4">Manager Dashboard</h1>
-                {renderMainContent()}
-            </div>
+        <DefaultDashboardView
+            commissions={commissions}
+            handleReviewCommissions={handleReviewCommissions}
+            handleManageTeam={handleManageTeam}
+            handleViewReports={handleViewReports}
+            searchTerm={searchTerm} setSearchTerm={setSearchTerm}
+            startDate={startDate} setStartDate={setStartDate}
+            endDate={endDate} setEndDate={setEndDate}
+            statusFilter={statusFilter} setStatusFilter={setStatusFilter}
+            teamFilter={teamFilter} setTeamFilter={setTeamFilter}
+            consultantFilter={consultantFilter} setConsultantFilter={setConsultantFilter}
+            filtersRef={filtersRef}
+        />
+    );
+}
+
+export default function ManagerDashboard() {
+    return (
+        <RoleGuard allowedRoles={['manager']}>
+            <Suspense fallback={<LoadingSkeleton />}>
+                <ManagerDashboardContent />
+            </Suspense>
         </RoleGuard>
     );
 }

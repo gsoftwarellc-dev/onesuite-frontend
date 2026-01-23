@@ -14,6 +14,11 @@ export interface Commission {
     netRevenue: number;
     commissionRate: number;
     commissionAmount: number;
+    // New fields for Manager Dashboard
+    sfaPercentage?: number;
+    tieringPercentage?: number;
+    overridingPercentage?: number;
+
     status: CommissionStatus;
     statusHistory: {
         status: CommissionStatus;
@@ -84,6 +89,11 @@ export const commissionService = {
             netRevenue: parseFloat(item.commission.sale_amount),
             commissionRate: 0,
             commissionAmount: parseFloat(item.commission.calculated_amount),
+            // Mock data for UI development
+            sfaPercentage: 10,
+            tieringPercentage: 15,
+            overridingPercentage: 3,
+
             status: item.commission.state as CommissionStatus,
             statusHistory: [],
             submittedDate: item.created_at, // Approval creation date
@@ -144,6 +154,20 @@ export const commissionService = {
     // Get statistics for the dashboard
     getStats: async (role: string) => {
         const response = await api.get('/commissions/summary/');
+        return response.data;
+    },
+
+    // Approve a commission (Manager/Admin)
+    approveCommission: async (id: string, note?: string) => {
+        const response = await api.post<any>(`/commissions/${id}/approve/`, { note });
+        return response.data;
+    },
+
+    // Reject a commission (Manager/Admin)
+    rejectCommission: async (id: string, rejectionReason: string) => {
+        const response = await api.post<any>(`/commissions/${id}/reject/`, {
+            rejection_reason: rejectionReason
+        });
         return response.data;
     }
 };
