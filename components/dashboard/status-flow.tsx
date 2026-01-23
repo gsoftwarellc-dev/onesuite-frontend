@@ -1,6 +1,6 @@
 import { CheckCircle, Circle, ArrowRight, XCircle } from 'lucide-react';
 
-type CommissionStatus = 'pending' | 'authorized' | 'approved' | 'paid' | 'rejected' | 'processing';
+import { CommissionStatus } from '@/services/commissionService';
 
 interface StatusFlowProps {
     currentStatus: CommissionStatus;

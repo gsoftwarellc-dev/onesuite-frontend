@@ -1,6 +1,6 @@
 import { CheckCircle, DollarSign, Shield, AlertCircle } from 'lucide-react';
 
-type CommissionStatus = 'pending' | 'authorized' | 'approved' | 'paid' | 'rejected' | 'processing';
+import { CommissionStatus } from '@/services/commissionService';
 // Extended roles to match system
 type UserRole = 'consultant' | 'manager' | 'finance' | 'director' | 'admin';
 
