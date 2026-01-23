@@ -86,9 +86,12 @@ export const commissionService = {
     },
 
     // Get Pending Approvals (Manager View)
-    getPendingApprovals: async () => {
+    // Supports filtering by status or 'all' for dashboard metrics
+    getPendingApprovals: async (statusParam: string = 'submitted') => {
         try {
-            const response = await api.get<any>('/commissions/approvals/pending/');
+            const response = await api.get<any>('/commissions/approvals/pending/', {
+                params: { status: statusParam }
+            });
 
             // Handle both response formats:
             // 1. Paginated: { count, results: [...] }

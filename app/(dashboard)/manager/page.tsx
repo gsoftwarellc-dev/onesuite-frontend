@@ -543,7 +543,8 @@ function ManagerDashboardContent() {
     // Helper function to load/refresh commissions
     const loadCommissions = async () => {
         try {
-            const data = await commissionService.getPendingApprovals();
+            // Fetch ALL status ('all') so metrics include approved/paid commissions
+            const data = await commissionService.getPendingApprovals('all');
             setCommissions(data);
         } catch (error) {
             console.error('Failed to load manager dashboard:', error);
