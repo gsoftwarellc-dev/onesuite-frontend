@@ -4,7 +4,7 @@
 set -e
 
 # Configuration
-PROJECT_ID="onesuite-447514"
+PROJECT_ID=$(gcloud config get-value project)
 REGION="asia-southeast1"
 SERVICE_NAME="onesuite-frontend"
 
