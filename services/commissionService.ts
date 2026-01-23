@@ -160,7 +160,54 @@ export const commissionService = {
 
     // Submit a new commission
     createCommission: async (data: CreateCommissionDTO) => {
-        const response = await api.post<Commission>('/commissions/create/', data);
+        // Get current user ID from auth context or token
+        const userStr = localStorage.getItem('user');
+        const user = userStr ? JSON.parse(userStr) : null;
+        const consultantId = user?.id;
+
+        if (!consultantId) {
+            throw new Error('User not authenticated');
+        }
+
+        // Calculate commission rate from SFA and Tiering
+        // Backend expects a single commission_rate, so we combine SFA * Tiering
+        const commissionRate = data.sfa * (data.tiering / 100);
+
+        // Calculate the commission amount
+        const saleAmount = data.grossRevenue;
+        const gstRate = data.gstPaid === 'yes' ? 10 : 0; // Assume 10% GST if paid
+
+        // Calculate: (sale_amount / (1 + gst_rate/100)) * (commission_rate / 100)
+        const baseAmount = gstRate > 0 ? saleAmount / (1 + gstRate / 100) : saleAmount;
+        const calculatedAmount = baseAmount * (commissionRate / 100);
+
+        // Generate unique reference number
+        const referenceNumber = `COM-${Date.now()}-${Math.random().toString(36).substr(2, 9).toUpperCase()}`;
+
+        // Build notes with all the extra information
+        const notes = [
+            `Client: ${data.clientName}`,
+            `Product: ${data.productType}`,
+            `SFA: ${data.sfa}%`,
+            `Tiering: ${data.tiering}%`,
+            data.referralName ? `Referral: ${data.referralName} (${data.referralPercentage}%)` : '',
+            data.probationIncentive ? `Probation Incentive: S$${data.probationIncentive}` : '',
+            data.otherClaimsRemarks ? `Other Claims: ${data.otherClaimsRemarks} (S$${data.otherClaimsAmount})` : '',
+        ].filter(Boolean).join(' | ');
+
+        // Transform to backend format
+        const backendPayload = {
+            consultant_id: consultantId,
+            transaction_date: data.paymentDate, // Already in YYYY-MM-DD format
+            sale_amount: saleAmount,
+            gst_rate: gstRate,
+            commission_rate: commissionRate,
+            calculated_amount: calculatedAmount,
+            reference_number: referenceNumber,
+            notes: notes
+        };
+
+        const response = await api.post<any>('/commissions/create/', backendPayload);
         return response.data;
     },
 
