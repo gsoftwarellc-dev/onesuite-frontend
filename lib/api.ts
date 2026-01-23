@@ -3,8 +3,7 @@ import { getAccessToken, getRefreshToken, setAccessToken, setRefreshToken, clear
 
 const apiBaseUrl =
     process.env.NEXT_PUBLIC_API_BASE_URL ||
-    process.env.NEXT_PUBLIC_API_URL ||
-    'http://localhost:8000/api';
+    'https://onesuite-backend-86225501431.asia-southeast1.run.app/api';
 
 const api = axios.create({
     baseURL: apiBaseUrl,
