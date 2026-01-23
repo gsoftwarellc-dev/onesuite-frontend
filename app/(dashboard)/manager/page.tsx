@@ -77,20 +77,44 @@ const DefaultDashboardView = ({
 }: any) => {
     const router = useRouter();
 
-    // Mock Data for Charts
-    const teamPerformanceData = [
-        { name: 'John Doe', amount: 48000 },
-        { name: 'Jane Smith', amount: 42000 },
-        { name: 'Mike Johnson', amount: 52000 },
-        { name: 'Sarah W.', amount: 39000 },
-        { name: 'Robert B.', amount: 29000 },
-    ];
+    // Calculate real metrics from commission data
+    const pendingCount = commissions.filter((c: Commission) => c.status === 'pending').length;
+    const approvedThisMonth = commissions
+        .filter((c: Commission) => {
+            const isApproved = ['approved', 'authorized'].includes(c.status);
+            const thisMonth = new Date(c.submittedDate).getMonth() === new Date().getMonth();
+            return isApproved && thisMonth;
+        })
+        .reduce((sum: number, c: Commission) => sum + c.commissionAmount, 0);
 
-    const pieData = [
-        { name: 'Approved', value: 75, color: '#10b981' }, // Green
-        { name: 'Pending', value: 20, color: '#f59e0b' },  // Orange
-        { name: 'Rejected', value: 5, color: '#ef4444' },  // Red
-    ];
+    // Calculate team performance data from real commissions
+    const consultantPerformance = commissions.reduce((acc: any, c: Commission) => {
+        if (!acc[c.consultantName]) {
+            acc[c.consultantName] = 0;
+        }
+        acc[c.consultantName] += c.commissionAmount;
+        return acc;
+    }, {});
+
+    const teamPerformanceData = Object.entries(consultantPerformance)
+        .map(([name, amount]) => ({ name, amount }))
+        .sort((a: any, b: any) => b.amount - a.amount)
+        .slice(0, 5); // Top 5 performers
+
+    // Calculate pie chart data from real commission statuses
+    const statusCounts = commissions.reduce((acc: any, c: Commission) => {
+        if (c.status === 'pending') acc.pending++;
+        else if (['approved', 'authorized'].includes(c.status)) acc.approved++;
+        else if (c.status === 'rejected') acc.rejected++;
+        return acc;
+    }, { approved: 0, pending: 0, rejected: 0 });
+
+    const total = statusCounts.approved + statusCounts.pending + statusCounts.rejected;
+    const pieData = total > 0 ? [
+        { name: 'Approved', value: Math.round((statusCounts.approved / total) * 100), color: '#10b981' },
+        { name: 'Pending', value: Math.round((statusCounts.pending / total) * 100), color: '#f59e0b' },
+        { name: 'Rejected', value: Math.round((statusCounts.rejected / total) * 100), color: '#ef4444' },
+    ].filter(d => d.value > 0) : [];
 
     const StatsCard = ({ title, value, sub, icon: Icon, iconColorClass }: any) => (
         <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-100 flex flex-col justify-between h-full">
@@ -135,10 +159,34 @@ const DefaultDashboardView = ({
         <div className="space-y-8 pb-10">
             {/* 1. Metrics Cards */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                <StatsCard title="Pending Review" value="12" sub="Requires your attention" icon={Clock} iconColorClass="bg-yellow-500" />
-                <StatsCard title="Approved This Month" value="S$45,200" sub="+8% from last month" icon={CheckCircle} iconColorClass="bg-green-500" />
-                <StatsCard title="Active Team Members" value="18" sub="3 high performers" icon={Users} iconColorClass="bg-blue-500" />
-                <StatsCard title="Team Performance" value="94%" sub="Above target" icon={TrendingUp} iconColorClass="bg-purple-500" />
+                <StatsCard
+                    title="Pending Review"
+                    value={pendingCount}
+                    sub="Requires your attention"
+                    icon={Clock}
+                    iconColorClass="bg-yellow-500"
+                />
+                <StatsCard
+                    title="Approved This Month"
+                    value={`S$${approvedThisMonth.toLocaleString()}`}
+                    sub="Current month"
+                    icon={CheckCircle}
+                    iconColorClass="bg-green-500"
+                />
+                <StatsCard
+                    title="Total Commissions"
+                    value={commissions.length}
+                    sub="All time"
+                    icon={Users}
+                    iconColorClass="bg-blue-500"
+                />
+                <StatsCard
+                    title="Approval Rate"
+                    value={total > 0 ? `${Math.round((statusCounts.approved / total) * 100)}%` : '0%'}
+                    sub="Approved vs Total"
+                    icon={TrendingUp}
+                    iconColorClass="bg-purple-500"
+                />
             </div>
 
             {/* 2. Quick Actions */}
